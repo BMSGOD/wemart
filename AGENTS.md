@@ -5,7 +5,7 @@
 Mobile-first campus marketplace (buy/sell on university campuses). **Static build only — no backend.** Data is hardcoded sample data; there are no API calls, env vars, or secrets anywhere yet.
 
 - Stack: Vite 8 + React 19 + TypeScript 6, Tailwind CSS **v4** (plugin `@tailwindcss/vite` in `vite.config.ts`; styling entry is `@import "tailwindcss"` in `src/index.css` — there is **no `tailwind.config.*` file and none should be added**)
-- Deploy target: Cloudflare Pages (`npm run build` → `dist/`, SPA fallback in `public/_redirects`)
+- Deploy target: Cloudflare Pages (`npm run build` → `dist/`, SPA fallback in `public/_redirects`; deploy with `npx wrangler pages deploy dist`)
 
 ## Commands
 
@@ -13,10 +13,10 @@ Mobile-first campus marketplace (buy/sell on university campuses). **Static buil
 npm run dev       # dev server
 npm run build     # tsc -b && vite build — typecheck AND build in one step
 npm run preview   # serve dist/ to verify the production build
-npm run lint      # oxlint (used in CI, no eslint/prettier — don't add style configs)
+npm run lint      # oxlint (no eslint/prettier — don't add style configs)
 ```
 
-There is no test framework by design in v1. Don't add one without prompting.
+There is no test framework and **no CI** (no `.github/`) by design in v1. Don't add either without prompting.
 
 ## Structure
 
@@ -31,4 +31,10 @@ There is no test framework by design in v1. Don't add one without prompting.
 
 - **Never put secret keys anywhere in `src/` — everything becomes public in the `dist/` bundle.** If an API key is ever needed, keep it behind a Cloudflare Worker/proxy, not the front end. `VITE_`-prefixed env vars are also public
 - Mobile-first: design for phones first, add `sm:`/`lg:` breakpoints upward (existing components follow this)
-- Widget validation currently catches nothing; `npm run build` passing is the only automated verification. Run it before declaring work done
+- `npm run build` passing is the only automated verification (it runs `tsc` typecheck + bundle). Run it before declaring work done
+
+## Environment gotchas
+
+- **Check your working directory before writing anything.** OpenCode sessions on this machine sometimes start in `C:\Program Files\Git` — that is the Git for Windows *install directory*, not a repo. This project lives at `C:\Users\PAP AMNESTY\Wemart`. Never create or edit files in the install dir
+- `LF will be replaced by CRLF` warnings when staging are normal here (`core.autocrlf=true` on Windows). Do not add `.gitattributes` or churn line endings to "fix" them unless asked
+- Commit identity is repo-local only (`git config user.*`, not global) — don't assume a global git identity exists
