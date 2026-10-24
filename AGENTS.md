@@ -1,8 +1,10 @@
 # AGENTS.md
 
+> Binding rules of engagement live in **`PROTOCOL.md`** — read it first, especially: run the verification gates (`npm run build && npm run lint`) after each meaningful change, fix root causes instead of suppressing errors, and **never commit/push/deploy without explicit user authorization**.
+
 ## What this is
 
-Mobile-first campus marketplace (buy/sell on university campuses). **Static build only — no backend.** Data is hardcoded sample data; there are no API calls, env vars, or secrets anywhere yet.
+Mobile-first **Nigerian** campus marketplace (buy/sell on university campuses, prices in naira). **Static build only — no backend.** Data is hardcoded sample data; there are no API calls, env vars, or secrets anywhere yet; no Supabase client is installed.
 
 - Stack: Vite 8 + React 19 + TypeScript 6, Tailwind CSS **v4** (plugin `@tailwindcss/vite` in `vite.config.ts`; styling entry is `@import "tailwindcss"` in `src/index.css` — there is **no `tailwind.config.*` file and none should be added**)
 - Deploy target: Cloudflare Pages (`npm run build` → `dist/`, SPA fallback in `public/_redirects`; deploy with `npx wrangler pages deploy dist`)
@@ -34,7 +36,7 @@ There is no test framework and **no CI** (no `.github/`) by design in v1. Don't 
 - **Do not implement payment processing or pretend transactions are real.** No fake checkout flows
 - **Never put secret keys anywhere in `src/` — everything becomes public in the `dist/` bundle.** If an API key is ever needed, keep it behind a Cloudflare Worker/proxy, not the front end. `VITE_`-prefixed env vars are also public
 - Mobile-first: design for phones first, add `sm:`/`lg:` breakpoints upward (existing components follow this)
-- `npm run build` passing is the only automated verification (it runs `tsc` typecheck + bundle). Run it before declaring work done
+- `npm run build && npm run lint` from the repo root are the verification gates (build runs `tsc` typecheck + bundle; lint is `oxlint`). Run both before declaring work done
 
 ## Environment gotchas
 
