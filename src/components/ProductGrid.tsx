@@ -3,9 +3,11 @@ import ProductCard from './ProductCard'
 
 type Props = {
   products: Product[]
+  /** Smaller two-column layout for featured rows */
+  compact?: boolean
 }
 
-export default function ProductGrid({ products }: Props) {
+export default function ProductGrid({ products, compact = false }: Props) {
   if (products.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
@@ -21,7 +23,13 @@ export default function ProductGrid({ products }: Props) {
   }
 
   return (
-    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+    <ul
+      className={
+        compact
+          ? 'grid grid-cols-2 gap-3 lg:grid-cols-4'
+          : 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4'
+      }
+    >
       {products.map((p) => (
         <li key={p.id}>
           <ProductCard product={p} />

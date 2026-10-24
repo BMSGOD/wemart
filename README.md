@@ -1,7 +1,7 @@
 # Wemart — Campus Marketplace
 
-Mobile-first marketplace for buying and selling on university campuses.
-Static build, no backend yet — sample data only.
+Mobile-first Nigerian marketplace connecting buyers and vendors across university campuses.
+Static build, no backend yet — sample data only (see rules in `AGENTS.md`).
 
 **This file is the onboarding doc for agents working here. See `AGENTS.md` first.**
 

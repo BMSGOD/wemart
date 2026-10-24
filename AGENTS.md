@@ -20,15 +20,18 @@ There is no test framework and **no CI** (no `.github/`) by design in v1. Don't 
 
 ## Structure
 
-- `src/types.ts` — `Product`, `Campus`, `Category`; `CATEGORIES` array is the single source for category lists
-- `src/data/` — sample data. Product `campus` field must be a `Campus.id` from `src/data/campuses.ts`; product `category` must be one of `CATEGORIES`. Typos here silently filter out items instead of erroring — the compiler does not catch these string mismatches
-- `src/components/` — `App.tsx` composes filters (campus + search + category, all AND-combined via `useMemo`). Adding a filter means: state in `App.tsx`, logic in the same `useMemo`, component in `components/`
-- Prices are Ghana cedis (`GHS` via `Intl.NumberFormat` in `ProductCard`)
+- `src/types.ts` — `Product`, `Campus`, `Category`, `Condition`, `Availability`; `CATEGORIES` array is the single source for category lists
+- `src/data/` — **sample data only.** `data/sample-data.ts` re-exports `campuses.ts` + `products.ts`; **only `src/lib/catalog.ts` may import sample data.** Components must call `searchProducts` / `getFeatured` from the catalog layer — never read the data arrays directly. When Supabase is integrated later (schema + policies finalized first), only `catalog.ts` changes
+- `src/components/` — `App.tsx` composes filters (campus + search + category, all AND-combined via one `searchProducts` call in a `useMemo`). Adding a filter means: state in `App.tsx`, inside `catalogQuery`, component in `components/`. `Header.tsx` owns the mobile hamburger nav
+- Product fields: `campus` must be a `Campus.id`, `category` one of `CATEGORIES`, `condition` is `'new' | 'like-new' | 'used'`, `availability` is `'available' | 'reserved' | 'sold'`, `featured` picks items for the Featured row. Typos in these string fields silently filter out items instead of erroring — the compiler does not catch them
+- Prices are Nigerian naira (`NGN` via `Intl.NumberFormat('en-NG')` in `ProductCard`)
 - UI is emoji placeholders, not images — real image assets don't exist yet
 - Single page, no router. Only add `react-router` (or similar) if a page beyond home is needed; the `_redirects` file already supports it
 
 ## Rules
 
+- **Frontend first; do not connect Supabase yet.** The provider will finalize the DB schema and security policies first. Also do not create databases or project scaffolds
+- **Do not implement payment processing or pretend transactions are real.** No fake checkout flows
 - **Never put secret keys anywhere in `src/` — everything becomes public in the `dist/` bundle.** If an API key is ever needed, keep it behind a Cloudflare Worker/proxy, not the front end. `VITE_`-prefixed env vars are also public
 - Mobile-first: design for phones first, add `sm:`/`lg:` breakpoints upward (existing components follow this)
 - `npm run build` passing is the only automated verification (it runs `tsc` typecheck + bundle). Run it before declaring work done
