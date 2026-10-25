@@ -4,6 +4,15 @@ export type Campus = {
 }
 
 /**
+ * campus_directory row — the dropdown source under the
+ * STATE → CAMPUS location model (no city/region tiers).
+ */
+export type CampusDirectoryEntry = Campus & {
+  stateId: string
+  stateName: string
+}
+
+/**
  * A DB category row — `categories` where is_active = true (id + name).
  * Category chips filter by id, display by name.
  */
@@ -48,8 +57,11 @@ export type Product = {
   imageAlt?: string
   /** Vendor display name (public info from the catalog view) */
   vendor: string
-  /** Campus name, falling back to the pickup location name */
-  locationName?: string
+  /** Campus display name (catalog view `campus_name`) */
+  campusName?: string
+  /** Parent state of the campus (catalog view `campus_state_id/name`) */
+  campusStateId?: string
+  campusStateName?: string
   /** Retired: no verified flag exists in the live DB yet */
   verified?: boolean
 }

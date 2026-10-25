@@ -85,10 +85,12 @@ export default function ProductCard({ product }: { product: Product }) {
           {product.vendor}
         </p>
 
-        {/* Campus or pickup location name */}
-        {product.locationName && (
+        {/* Campus + state, e.g. "ABU, Kaduna" (no city tier in the model) */}
+        {product.campusName && (
           <p className="truncate text-[11px] text-ink/60">
-            {product.locationName}
+            {product.campusStateName
+              ? `${product.campusName} annon. ${product.campusStateName}`
+              : product.campusName}
           </p>
         )}
 

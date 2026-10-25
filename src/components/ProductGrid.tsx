@@ -5,18 +5,22 @@ type Props = {
   products: Product[]
   /** Smaller two-column layout for featured rows */
   compact?: boolean
+  /** Message shown when the filtered list is empty */
+  emptyMessage?: string
 }
 
-export default function ProductGrid({ products, compact = false }: Props) {
+export default function ProductGrid({
+  products,
+  compact = false,
+  emptyMessage = 'No items here yet. Be the first to sell on this campus.',
+}: Props) {
   if (products.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-white px-4 py-10 text-center">
         <p className="text-2xl" aria-hidden="true">
           🛒
         </p>
-        <p className="mt-2 text-sm font-medium text-ink">
-          No items here yet. Be the first to sell on this campus.
-        </p>
+        <p className="mt-2 text-sm font-medium text-ink">{emptyMessage}</p>
       </div>
     )
   }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import CampusPicker from './CampusPicker'
-import type { Campus } from '../types'
+import LocationSelects, { type LocationSelection } from './LocationSelects'
+import type { CampusDirectoryEntry } from '../types'
 
 const NAV_LINKS = [
   { label: 'Home', href: '#' },
@@ -11,12 +11,18 @@ const NAV_LINKS = [
 ]
 
 type Props = {
-  campuses: Campus[]
-  campus: string
+  directory: CampusDirectoryEntry[]
+  location: LocationSelection
+  onStateChange: (stateId: string) => void
   onCampusChange: (campusId: string) => void
 }
 
-export default function Header({ campuses, campus, onCampusChange }: Props) {
+export default function Header({
+  directory,
+  location,
+  onStateChange,
+  onCampusChange,
+}: Props) {
   const [cartOpen, setCartOpen] = useState(false)
 
   return (
@@ -32,11 +38,13 @@ export default function Header({ campuses, campus, onCampusChange }: Props) {
           />
         </a>
 
-        {/* Campus selector lives in the sticky header on every screen size */}
-        <CampusPicker
-          campuses={campuses}
-          value={campus}
-          onChange={onCampusChange}
+        {/* Location selector (State + Campus) lives in the sticky header
+            on every screen size */}
+        <LocationSelects
+          directory={directory}
+          location={location}
+          onStateChange={onStateChange}
+          onCampusChange={onCampusChange}
           compact
         />
 
