@@ -43,17 +43,17 @@ There is no test framework and **no CI** (no `.github/`) by design in v1. Don't 
 | `gray-cart` | `#ECECEC` | Cart drawer / neutral filled surfaces |
 | `surface` | `#F7F5F3` | Page background |
 | `border` | `#D9D4CF` | All card/button borders |
-| `green` | `#1B7F46` | In-stock marker, verified-vendor starburst |
+| `green` | `#1B7F46` | In-stock marker, verified-vendor check icon |
 
-Fonts: `@fontsource-variable/bricolage-grotesque` (headlines, `font-display`) and `@fontsource-variable/figtree` (body, `font-sans`) — **self-hosted via Vite bundling; never load fonts from a CDN.** Imports live at the top of `src/index.css` before `@import "tailwindcss"`.
+Fonts: single self-hosted stack, `font-sans: "Helvetica Neue", Helvetica, Arimo, Arial, sans-serif` (used for everything; headings are bold). `@fontsource/arimo` provides the bundled fallback (imported weights 400 and 700 in `src/index.css` — self-hosted via Vite; **never load fonts from a CDN**; there is no separate display font).
 
 Rules (all intentional — keep consistent):
-- **The memorable element is the 7-point starburst** (matches the logo): `src/components/Starburst.tsx` (inline SVG polygon, color via `currentColor`). Used for price badges, the verified-vendor badge, and one large cropped decorative starburst behind the hero. Some cards may show a green verified starburst.
+- **No decorative stars; the logo is the only star.** The `wemart-logo.png` in the header (and the favicons) are the only star assets; there is no starburst component or SVG/CSS star anywhere in the UI.
 - **Hard offset shadow** `3px 3px 0 0 ink`, no blur, no soft grey shadows, no gradients — via the `hard-shadow` utility. Applied to primary buttons (always) and product cards (on hover/press only).
 - **One radius for cards and buttons: 8px** (`rounded-lg`). Pill shape only for category chips.
-- **Primary button**: `bg-orange text-ink`; hover `bg-orange-deep text-white`. The hard shadow stays on hover and collapses on press (`active:translate + shadow-none`). Any orange text on white uses `orange-deep`.
-- **Layout**: sticky header (logo, campus selector, cart); hero with headline "Buy and sell on campus.", large campus picker, search box, "Sell an item" primary button; horizontally scrolling category chips; product grid 2 columns on phones, 3–4 on wider screens; mobile-only bottom nav (Home, Browse, Sell, Orders, Me).
-- **Product cards**: CSS emoji placeholder (no external image URLs), name, price in a starburst badge (`aria-hidden` + `sr-only` full-price line), condition tag, vendor shop name, availability marker — green "In stock" for available, neutral for reserved/sold.
+- **Primary button**: `bg-orange text-ink`; hover `bg-orange-deep text-white`. The hard shadow stays on hover and collapses on press (`active:translate + shadow-none`). **Text on orange backgrounds is always Ink `#181311`, never white.** Any orange text on white uses `orange-deep`.
+- **Layout**: sticky header (logo, campus selector, cart); compact hero with headline "Discover on Wemart.", supporting line, large campus picker, search box, "Sell an item" primary button — all above the fold on a phone; horizontally scrolling category chips; product grid 2 columns on phones, 3–4 on wider screens; mobile-only bottom nav (Home, Browse, Sell, Orders, Me).
+- **Product cards**: CSS emoji placeholder (no external image URLs), name, **plain bold price in ink under the name**, condition tag, vendor shop name with a small green check icon for verified vendors, availability marker — green "In stock" for available, neutral for reserved/sold.
 - **A11y/perf**: global visible `:focus-visible` outline (ink); `prefers-reduced-motion` disables transitions/animations; the page stays light for mobile data (no image URLs, self-hosted subsets only).
 - The cart is intentionally an empty-state panel — **no fake checkout flows** (see Rules).
 

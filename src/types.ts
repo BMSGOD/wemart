@@ -28,7 +28,7 @@ export type Product = {
   emoji: string /* placeholder image until real listings use uploaded photos */
   /** Vendor shop display name (sample data; real shops come with accounts later) */
   vendor: string
-  /** Verified vendor flag — shown as a green starburst badge on cards */
+  /** Verified vendor flag — shown as a small green check icon next to the shop name */
   verified?: boolean
 }
 

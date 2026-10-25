@@ -1,6 +1,8 @@
-/* Self-hosted brand fonts (bundled by Vite from node_modules — no CDN) */
-@import "@fontsource-variable/figtree";
-@import "@fontsource-variable/bricolage-grotesque";
+/* Self-hosted fallback fonts (bundled by Vite from node_modules — no CDN).
+   Helvetica/Arial render first when installed locally; Arimo (metric-compatible
+   with Arial) is the bundled webfont fallback. */
+@import "@fontsource/arimo/400.css";
+@import "@fontsource/arimo/700.css";
 @import "tailwindcss";
 
 @theme {
@@ -14,8 +16,8 @@
   --color-border: #D9D4CF;
   --color-green: #1B7F46;
 
-  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: "Bricolage Grotesque Variable", "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  /* One stack for everything; headings are simply bold */
+  --font-sans: "Helvetica Neue", Helvetica, Arimo, Arial, sans-serif;
 }
 
 /* Hard offset shadow taken from the logo's cart: flat, no blur, ink.

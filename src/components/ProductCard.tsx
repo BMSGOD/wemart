@@ -1,5 +1,4 @@
 import type { Availability, Condition, Product } from '../types'
-import Starburst from './Starburst'
 
 const formatter = new Intl.NumberFormat('en-NG', {
   style: 'currency',
@@ -41,22 +40,6 @@ export default function ProductCard({ product }: { product: Product }) {
       {/* Image placeholder, CSS only (emoji + brand tint until uploads exist) */}
       <div className="relative flex h-28 items-center justify-center bg-orange-tint text-4xl sm:h-32">
         <span aria-hidden="true">{product.emoji}</span>
-
-        {/* Price inside the brand starburst badge */}
-        <Starburst
-          size={52}
-          className="absolute top-2 right-2 text-orange"
-        >
-          <span
-            className="text-[9px] font-bold text-ink sm:text-[10px]"
-            aria-hidden="true"
-          >
-            {formatter.format(product.price)}
-          </span>
-          <span className="sr-only">
-            Price: {formatter.format(product.price)}
-          </span>
-        </Starburst>
       </div>
 
       <div className="flex flex-1 flex-col gap-1.5 p-3">
@@ -64,21 +47,25 @@ export default function ProductCard({ product }: { product: Product }) {
           {product.title}
         </h3>
 
-        {/* Vendor + verified badge */}
+        {/* Plain bold price in ink, right under the name */}
+        <p className="text-base font-bold text-ink">
+          {formatter.format(product.price)}
+        </p>
+
+        {/* Vendor + verified check */}
         <p className="flex items-center gap-1 text-[11px] text-ink/70">
           {product.verified && (
-            <Starburst size={13} className="text-green" title="Verified vendor">
-              <svg viewBox="0 0 12 12" className="h-2 w-2" aria-hidden="true">
-                <path
-                  d="M2.5 6.5l2.5 2.5 4.5-6"
-                  stroke="#fff"
-                  strokeWidth="2.2"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </Starburst>
+            <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-label="Verified vendor" role="img">
+              <circle cx="8" cy="8" r="7.5" fill="#1B7F46" />
+              <path
+                d="M4.8 8.4l2.1 2.1 4.3-4.8"
+                stroke="#fff"
+                strokeWidth="1.8"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           )}
           <span className="truncate">{product.vendor}</span>
         </p>

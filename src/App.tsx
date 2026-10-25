@@ -5,7 +5,6 @@ import CampusPicker from './components/CampusPicker'
 import SearchBox from './components/SearchBox'
 import CategoryButtons from './components/CategoryButtons'
 import ProductGrid from './components/ProductGrid'
-import Starburst from './components/Starburst'
 import { searchProducts, getFeatured, DATA_SOURCE_LABEL } from './lib/catalog'
 import type { Category } from './types'
 
@@ -28,25 +27,20 @@ export default function App() {
     <div className="min-h-dvh bg-surface">
       <Header campus={campus} onCampusChange={setCampus} />
 
-      <main className="mx-auto max-w-5xl space-y-5 px-4 py-5">
-        {/* Hero: memorable headline + the two primary pickers */}
-        <section className="relative overflow-hidden rounded-lg border border-border bg-white p-5 sm:p-8">
-          {/* One large cropped starburst, matching the logo motif */}
-          <Starburst
-            size={340}
-            className="pointer-events-none absolute -top-24 -right-24 text-orange-tint sm:-top-32 sm:-right-20"
-          />
-
+      <main className="mx-auto max-w-5xl space-y-5 px-4 py-4">
+        {/* Hero: headline + the two primary pickers, compact enough to fit
+            above the fold on a phone (no decorative elements) */}
+        <section className="relative overflow-hidden rounded-lg border border-border bg-white p-4 sm:p-6">
           <div className="relative">
-            <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
-              Buy and sell on campus.
+            <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-4xl">
+              Discover on Wemart.
             </h1>
-            <p className="mt-2 max-w-md text-sm text-ink/70 sm:text-base">
+            <p className="mt-1 max-w-md text-sm text-ink/70 sm:mt-2 sm:text-base">
               Phones, books, furniture and more from verified student vendors
               across Nigerian campuses. Safe meetups, fair prices.
             </p>
 
-            <div className="mt-5 max-w-sm space-y-3">
+            <div className="mt-3 max-w-sm space-y-3">
               <CampusPicker value={campus} onChange={setCampus} />
               <SearchBox value={query} onChange={setQuery} />
               <a
