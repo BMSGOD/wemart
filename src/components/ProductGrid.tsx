@@ -7,12 +7,15 @@ type Props = {
   compact?: boolean
   /** Message shown when the filtered list is empty */
   emptyMessage?: string
+  /** When provided, the empty state offers a "Clear filters" action */
+  onClearFilters?: () => void
 }
 
 export default function ProductGrid({
   products,
   compact = false,
   emptyMessage = 'No items here yet. Be the first to sell on this campus.',
+  onClearFilters,
 }: Props) {
   if (products.length === 0) {
     return (
@@ -21,6 +24,15 @@ export default function ProductGrid({
           🛒
         </p>
         <p className="mt-2 text-sm font-medium text-ink">{emptyMessage}</p>
+        {onClearFilters && (
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="hard-shadow mt-3 rounded-lg bg-orange px-4 py-2 text-sm font-bold text-ink transition hover:bg-orange-deep hover:text-white active:translate-x-0.5 active:translate-y-0.5 active:shadow-none motion-reduce:active:translate-x-0 motion-reduce:active:translate-y-0"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
     )
   }

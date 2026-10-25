@@ -13,12 +13,14 @@ export type CampusDirectoryEntry = Campus & {
 }
 
 /**
- * A DB category row — `categories` where is_active = true (id + name).
- * Category chips filter by id, display by name.
+ * A DB category row — `categories` where is_active = true.
+ * Two levels: parent_category_id = null marks a top-level category.
  */
 export type CategoryRef = {
   id: string
   name: string
+  parentCategoryId: string | null
+  sortOrder: number
 }
 
 /**
@@ -33,6 +35,37 @@ export type Condition =
   | 'other'
 
 export type Availability = 'available' | 'reserved' | 'sold'
+
+/** Sort orders supported by the catalog query (stable-order enforced) */
+export type SortOption = 'newest' | 'price-asc' | 'price-desc'
+
+/**
+ * Full UI-side filter state — the single source shared by App and the
+ * FilterSheet. All ids default to 'all'; prices are naira, null = not set.
+ */
+export type Filters = {
+  stateId: string
+  campusId: string
+  categoryId: string
+  subCategoryId: string
+  condition: Condition | 'all'
+  minPrice: number | null
+  maxPrice: number | null
+  inStock: boolean
+  sort: SortOption
+}
+
+export const DEFAULT_FILTERS: Filters = {
+  stateId: 'all',
+  campusId: 'all',
+  categoryId: 'all',
+  subCategoryId: 'all',
+  condition: 'all',
+  minPrice: null,
+  maxPrice: null,
+  inStock: false,
+  sort: 'newest',
+}
 
 export type Product = {
   /** Unique card id — a catalog view offer id (one row per offer) */

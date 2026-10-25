@@ -85,12 +85,14 @@ export default function ProductCard({ product }: { product: Product }) {
           {product.vendor}
         </p>
 
-        {/* Campus + state, e.g. "ABU, Kaduna" (no city tier in the model) */}
-        {product.campusName && (
+        {/* Campus + state, e.g. "ABU, Kaduna" (no city tier in the model).
+            Offers with no campus link (data gap on some rows) show what is
+            known — never a fabricated location. */}
+        {(product.campusName || product.campusStateName) && (
           <p className="truncate text-[11px] text-ink/60">
-            {product.campusStateName
-              ? `${product.campusName} annon. ${product.campusStateName}`
-              : product.campusName}
+            {product.campusName && product.campusStateName
+              ? `${product.campusName}, ${product.campusStateName}`
+              : (product.campusName ?? product.campusStateName)}
           </p>
         )}
 

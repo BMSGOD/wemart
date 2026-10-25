@@ -194,23 +194,46 @@ export async function getCategories(): Promise<CategoryRef[]> {
   if (!client) {
     throw new ApiError('Wemart is not connected to its database yet.')
   }
+  /* Two-level taxonomy: parent_category_id = null marks a top-level
+     category; children sort below their parent via sort_order. */
   const { data, error } = await client
     .from('categories')
-    .select('id, name')
+    .select('id, name, parent_category_id, sort_order')
     .eq('is_active', true)
+    .order('sort_order')
     .order('name')
   if (error) {
     throw new ApiError(`Could not load categories: ${error.message}`, error)
   }
-  return (data ?? []) as unknown as CategoryRef[]
+  const rows = (data ?? []) as unknown as Array<{
+    id: string
+    name: string
+    parent_category_id: string
+    sort_order: number
+  }>
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    parentCategoryId: row.parent_category_id,
+    sortOrder: row.sort_order,
+  }))
 }
 
 export type CatalogQuery = {
   campusId?: string
   /** STATE → CAMPUS model: state-level filter when no campus is chosen */
   stateId?: string
-  categoryId?: string
+  /** Strict db-side category set (top-level = itself + children, or a sub) */
+  categoryIds?: string[]
+  condition?: Condition
+  /* Naira bounds, null = no bound */
+  minPrice?: number
+  maxPrice?: number
+  inStock?: boolean
   search?: string
+  /** Offer ids to drop from the result (e.g. already-visible items) */
+  excludeIds?: string[]
+  sort?: 'newest' | 'price-asc' | 'price-desc'
   limit?: number
   offset?: number
 }
@@ -242,8 +265,14 @@ export async function getCatalog(
   const {
     campusId,
     stateId,
-    categoryId,
+    categoryIds,
+    condition,
+    minPrice,
+    maxPrice,
+    inStock,
     search,
+    excludeIds,
+    sort,
     limit = 24,
     offset = 0,
   } = query
@@ -252,12 +281,28 @@ export async function getCatalog(
     .from('catalog')
     .select(CATALOG_COLUMNS, { count: 'exact' })
 
+  /* Drop already-visible offers (used by recommendations to avoid
+     duplicating the "New arrivals" strip on screen) */
+  if (excludeIds && excludeIds.length > 0) {
+    request = request.not('offer_id', 'in', `(${excludeIds.join(',')})`)
+  }
+
   if (campusId) {
     request = request.eq('campus_id', campusId)
   } else if (stateId) {
     request = request.eq('campus_state_id', stateId)
   }
-  if (categoryId) request = request.eq('category_id', categoryId)
+  /* Strict database-side category filtering: a top-level selection
+     matches itself AND its children via IN; a sub-category matches only
+     itself (items without a category only ever appear under "All")
+     — never filtered in the browser afterwards. */
+  if (categoryIds && categoryIds.length > 0) {
+    request = request.in('category_id', categoryIds)
+  }
+  if (condition) request = request.eq('product_condition', condition)
+  if (typeof minPrice === 'number') request = request.gte('price', minPrice)
+  if (typeof maxPrice === 'number') request = request.lte('price', maxPrice)
+  if (inStock) request = request.gt('available_quantity', 0)
   const term = (search ?? '').trim()
   if (term) {
     request = request.ilike(
@@ -265,9 +310,24 @@ export async function getCatalog(
       `%${escapeLikePattern(term)}%`,
     )
   }
-  request = request
-    .order('listed_at', { ascending: false })
-    .range(offset, offset + limit - 1)
+  /* Every sort keeps a deterministic tiebreaker chain so "Load more"
+     pages stay stable as filters combine */
+  if (sort === 'price-asc') {
+    request = request
+      .order('price', { ascending: true })
+      .order('listed_at', { ascending: false })
+      .order('offer_id', { ascending: false })
+  } else if (sort === 'price-desc') {
+    request = request
+      .order('price', { ascending: false })
+      .order('listed_at', { ascending: false })
+      .order('offer_id', { ascending: false })
+  } else {
+    request = request
+      .order('listed_at', { ascending: false })
+      .order('offer_id', { ascending: false })
+  }
+  request = request.range(offset, offset + limit - 1)
 
   const { data, error, count } = await request
   if (error) {
@@ -323,4 +383,62 @@ export async function getNearCampus(query: {
     items: rows.map(rowToProduct),
     total: offset + rows.length,
   }
+}
+
+/**
+ * Recommendation pool for empty filtered views: genuinely available offers
+ * (available_quantity > 0) from ANY category, ranked by proximity tier
+ * first and cheapest price second:
+ *   tier 1 — the user's selected campus,
+ *   tier 2 — other campuses in the user's selected state,
+ *   tier 3 — everywhere else.
+ * Tiers use the location hierarchy ONLY (campus → state → nationwide) and
+ * never claim geographic distance. Search/category/condition filters are
+ * deliberately dropped here; duplicates are removed by offer id. Card
+ * location labels stay truthful per card.
+ */
+export async function getRecommended(
+  query: {
+    campusId?: string
+    stateId?: string
+    /** Offers already on screen (e.g. "New arrivals") — excluded */
+    excludeIds?: string[]
+    limit?: number
+  } = {},
+): Promise<Product[]> {
+  const limit = query.limit ?? 12
+
+  const fetchTier = async (tier: {
+    campusId?: string
+    stateId?: string
+  }): Promise<Product[]> => {
+    const page = await getCatalog({
+      ...tier,
+      inStock: true,
+      sort: 'price-asc',
+      excludeIds: query.excludeIds,
+      limit,
+    })
+    return page.items
+  }
+
+  /* Tiers run sequentially so an exhausted earlier tier still fills the
+     pool from the next one; dedupe keeps the strict rank order. */
+  const seen = new Set<string>()
+  const out: Product[] = []
+  const tiers: Array<{ campusId?: string; stateId?: string }> = []
+  if (query.campusId) tiers.push({ campusId: query.campusId })
+  if (query.stateId) tiers.push({ stateId: query.stateId })
+  tiers.push({})
+
+  for (const tier of tiers) {
+    const items = await fetchTier(tier)
+    for (const product of items) {
+      if (seen.has(product.id)) continue
+      seen.add(product.id)
+      out.push(product)
+      if (out.length >= limit) return out
+    }
+  }
+  return out
 }
