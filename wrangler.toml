@@ -1,0 +1,21 @@
+# Cloudflare Workers static-assets configuration.
+#
+# NOTE ON THE SPA FALLBACK:
+# A Workers deployment (`wrangler deploy`) REJECTS the Pages-style rule
+# `/*    /index.html   200` in `dist/_redirects` with
+# "Infinite loop detected in this rule" (the destination matches the
+# catch-all source splat again). On Workers, SPA fallback must instead be
+# configured natively via `not_found_handling` below.
+#
+# `public/.assetsignore` (copied into dist/ by Vite) keeps the Workers
+# deployment from parsing/uploading `dist/_redirects`.
+# For a Cloudflare *Pages* deployment (`npx wrangler pages deploy dist`),
+# `public/_redirects` is still the correct SPA fallback and remains in
+# the repo unchanged.
+
+name = "wemart"
+compatibility_date = "2026-09-30"
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
