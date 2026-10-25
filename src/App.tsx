@@ -12,9 +12,7 @@ import {
   getCampusDirectory,
   getCatalog,
   getCategories,
-  getNearCampus,
   getRecommended,
-  type CatalogPage,
   type CatalogQuery,
 } from './data/api'
 import { DATA_SOURCE_DB_LABEL, isSupabaseConfigured } from './lib/supabase'
@@ -34,16 +32,14 @@ type LoadState =
   | { state: 'error'; message: string }
 
 /**
- * What drives the results list:
- * - campus: a specific campus chosen (eq campus_id)
- * - near:   expanded from a campus — same campus first, then the same
- *           state, then others (catalog_near_campus RPC). Only used when
- *           nothing else is filtered; otherwise falls back to a plain
- *           catalog query filtered by campus_state_id.
- * - state:  a state chosen without a campus (eq campus_state_id)
+ * What drives the results list (STATE → CAMPUS model):
+ * - campus: a specific campus chosen (p_campus_id) — catalog_search then
+ *   returns matching rows tier-ordered (same campus → same state →
+ *   everywhere else), which App groups under scope headings.
+ * - state:  a state chosen without a campus (p_state_id)
  * - all:    everything
  */
-type FilterMode = 'campus' | 'near' | 'state' | 'all'
+type FilterMode = 'campus' | 'state' | 'all'
 
 type ActiveChip = {
   key: string
@@ -56,8 +52,17 @@ type ListingResult = {
   key: string
   state: 'ok' | 'error'
   items: Product[]
+  /** Rows loaded so far — the RPC returns no exact count */
   total: number
+  /** True while the latest page came back full */
+  hasMore: boolean
   message?: string
+}
+
+/** A scope group of the result list: heading + its ordered rows */
+type ResultGroup = {
+  heading: string
+  products: Product[]
 }
 
 const PAGE_SIZE = 24
@@ -142,7 +147,6 @@ export default function App() {
     ...readSavedLocation(),
     ...readFiltersFromUrl(),
   }))
-  const [expanded, setExpanded] = useState(false)
   /* ?q= seeds the search box (and the debounced query) once at startup */
   const [searchInput, setSearchInput] = useState(
     () => new URLSearchParams(window.location.search).get('q') ?? '',
@@ -158,6 +162,7 @@ export default function App() {
     state: 'ok',
     items: [],
     total: 0,
+    hasMore: false,
   })
   const [listingToken, setListingToken] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -268,7 +273,6 @@ export default function App() {
           }
         })
       }
-      setExpanded(false)
     },
     [directory],
   )
@@ -287,14 +291,13 @@ export default function App() {
           stateId: campus ? campus.stateId : prev.stateId,
         }
       })
-      setExpanded(false)
     },
     [directory],
   )
 
-  /* Strict database-side category semantics:
-     - sub chosen       → category_id = sub
-     - top chosen       → category_id IN (top + its children)
+  /* Strict database-side category semantics, sent up to catalog_search:
+     - sub chosen       → p_category_ids = [sub]
+     - top chosen       → p_category_ids = [top + its children]
      - nothing chosen   → no filter (uncategorized items show under All) */
   const categoryIds = useMemo(() => {
     if (filters.subCategoryId !== 'all') return [filters.subCategoryId]
@@ -304,39 +307,28 @@ export default function App() {
     return undefined
   }, [filters.categoryId, filters.subCategoryId, chosenSubCategories])
 
-  /* Only-location extra = eligible for the nearby RPC expansion */
-  const isNearEligible =
-    !search &&
-    filters.categoryId === 'all' &&
-    filters.condition === 'all' &&
-    filters.minPrice === null &&
-    filters.maxPrice === null &&
-    !filters.inStock &&
-    filters.sort === 'newest'
-
-  const mode: FilterMode =
-    expanded && chosenCampus && isNearEligible
-      ? 'near'
-      : chosenCampus
-        ? 'campus'
-        : filters.stateId !== 'all'
-          ? 'state'
-          : 'all'
+  const mode: FilterMode = chosenCampus
+    ? 'campus'
+    : filters.stateId !== 'all'
+      ? 'state'
+      : 'all'
 
   const catalogQuery: CatalogQuery = useMemo(
     () => ({
-      campusId: mode === 'campus' ? filters.campusId : undefined,
-      stateId: mode === 'state' ? filters.stateId : undefined,
+      /* Campus beats state tier in the RPC ordering, so when a campus is
+         chosen only p_campus_id is sent */
+      campusId: chosenCampus ? filters.campusId : undefined,
+      stateId: !chosenCampus && filters.stateId !== 'all' ? filters.stateId : undefined,
       categoryIds,
       condition: filters.condition === 'all' ? undefined : filters.condition,
       minPrice: filters.minPrice ?? undefined,
       maxPrice: filters.maxPrice ?? undefined,
       inStock: filters.inStock || undefined,
       search: search || undefined,
-      sort: mode === 'near' ? 'newest' : filters.sort,
+      sort: filters.sort,
     }),
     [
-      mode,
+      chosenCampus,
       filters.campusId,
       filters.stateId,
       filters.condition,
@@ -362,20 +354,16 @@ export default function App() {
     const key = queryKey
     let cancelled = false
 
-    const request: Promise<CatalogPage> =
-      mode === 'near'
-        ? getNearCampus({
-            campusId: filters.campusId,
-            search: search || undefined,
-            limit: PAGE_SIZE,
-            offset: 0,
-          })
-        : getCatalog({ ...catalogQuery, limit: PAGE_SIZE, offset: 0 })
-
-    request
+    getCatalog({ ...catalogQuery, limit: PAGE_SIZE, offset: 0 })
       .then((page) => {
         if (cancelled) return
-        setCompleted({ key, state: 'ok', items: page.items, total: page.total })
+        setCompleted({
+          key,
+          state: 'ok',
+          items: page.items,
+          total: page.total,
+          hasMore: page.hasMore,
+        })
       })
       .catch((error: unknown) => {
         if (cancelled) return
@@ -384,6 +372,7 @@ export default function App() {
           state: 'error',
           items: [],
           total: 0,
+          hasMore: false,
           message:
             error instanceof ApiError
               ? error.message
@@ -393,18 +382,10 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [
-    queryKey,
-    mode,
-    catalogQuery,
-    filters.campusId,
-    search,
-    listingToken,
-    boot.state,
-  ])
+  }, [queryKey, catalogQuery, listingToken, boot.state])
 
-  /* Pagination: appends the next page only if the on-screen query is still
-     the one this click started from */
+  /* Pagination: appends the next page of the SAME ordered list — the
+     scope groups and their headings update as rows are added */
   const handleLoadMore = () => {
     if (
       loadingMore ||
@@ -416,17 +397,7 @@ export default function App() {
     }
     setLoadingMore(true)
     const offset = completed.items.length
-    const request: Promise<CatalogPage> =
-      mode === 'near'
-        ? getNearCampus({
-            campusId: filters.campusId,
-            search: search || undefined,
-            limit: PAGE_SIZE,
-            offset,
-          })
-        : getCatalog({ ...catalogQuery, limit: PAGE_SIZE, offset })
-
-    request
+    getCatalog({ ...catalogQuery, limit: PAGE_SIZE, offset })
       .then((page) => {
         setLoadingMore(false)
         setCompleted((prev) =>
@@ -436,6 +407,7 @@ export default function App() {
                 ...prev,
                 items: [...prev.items, ...page.items],
                 total: page.total,
+                hasMore: page.hasMore,
               },
         )
       })
@@ -476,7 +448,6 @@ export default function App() {
 
   const clearAllFilters = () => {
     setFilters({ ...DEFAULT_FILTERS })
-    setExpanded(false)
     setSearchInput('')
     setSearch('')
   }
@@ -579,27 +550,36 @@ export default function App() {
     handleCampusChange,
   ])
 
-  /* Load the recommendation pool when a filtered view is truly empty.
-     Kept strictly separate from the results grid: available offers only,
-     ranked by the location hierarchy (campus → state → nationwide) and
-     cheapest price first, never silently blended into the search result. */
-  const suggestWhenEmpty =
-    boot.state === 'ok' &&
-    !listingLoading &&
-    completed.state === 'ok' &&
-    completed.items.length === 0
+  const filtersActive = activeChips.length > 0
+
+  /* ---------------------------------------------------------------------
+     Nothing matched at all: honest empty message first, then ONE fallback
+     query through catalog_search with the location filters ONLY (no
+     category, search, condition, price, stock) — its own tier ordering
+     ranks the picks. Shown under the clear "Recommended for you" heading,
+     separated from (and never blended into) matching results.
+     ------------------------------------------------------------------- */
+  const nothingFound = !listingLoading && completed.state === 'ok' && completed.items.length === 0
+  const suggestWhenEmpty = boot.state === 'ok' && nothingFound
   const [suggestions, setSuggestions] = useState<Product[] | null>(null)
   useEffect(() => {
     if (!suggestWhenEmpty) return
     let cancelled = false
     getRecommended({
       campusId: filters.campusId === 'all' ? undefined : filters.campusId,
-      stateId: filters.stateId === 'all' ? undefined : filters.stateId,
-      excludeIds: newArrivals.map((product) => product.id),
+      stateId:
+        filters.campusId === 'all' && filters.stateId !== 'all'
+          ? filters.stateId
+          : undefined,
       limit: SUGGESTIONS_COUNT,
     })
       .then((items) => {
-        if (!cancelled) setSuggestions(items)
+        if (cancelled) return
+        /* Keep the "New arrivals" strip from repeating in the picks */
+        const arrivals = new Set(newArrivals.map((product) => product.id))
+        setSuggestions(
+          items.filter((product) => !arrivals.has(product.id)),
+        )
       })
       .catch(() => {
         if (!cancelled) setSuggestions([])
@@ -609,52 +589,131 @@ export default function App() {
     }
   }, [suggestWhenEmpty, filters, newArrivals])
 
-  const filtersActive = activeChips.length > 0
+  /* ---------------------------------------------------------------------
+     Result-labelling vocabulary:
+     - "label" = sub-category name, else category name, else the search
+       text in quotes, else "items"
+     - "place" = the chosen campus name, else the chosen state name
+     ------------------------------------------------------------------- */
+  const itemLabel = (() => {
+    if (filters.subCategoryId !== 'all') {
+      return (
+        chosenSubCategories.find(
+          (category) => category.id === filters.subCategoryId,
+        )?.name ?? 'items'
+      )
+    }
+    if (chosenTopCategory) return chosenTopCategory.name
+    if (search.trim() !== '') return `“${search.trim()}”`
+    return 'items'
+  })()
+
+  const chosenStateEntry = directory.find(
+    (entry) => entry.stateId === filters.stateId,
+  )
+  const chosenStateName =
+    chosenCampus?.stateName ??
+    (filters.stateId !== 'all' ? chosenStateEntry?.stateName : undefined)
+
+  /**
+   * Scope grouping of the completed page (catalog_search returns rows
+   * tier-ordered: chosen campus → same state → everywhere else, so the
+   * groups inherit that order). Matching results always come first and
+   * unrelated items are never mixed into a scope they don't belong to.
+   * "Load more" appends to items, so groups and headings update.
+   */
+  const resultGroups = useMemo<null | {
+    notice: boolean
+    noticeTitle: string
+    noticeHint: string
+    groups: ResultGroup[]
+  }>(() => {
+    const items = completed.items
+    if (completed.state !== 'ok' || items.length === 0) return null
+
+    if (chosenCampus) {
+      const atCampus: Product[] = []
+      const inState: Product[] = []
+      const elsewhere: Product[] = []
+      for (const product of items) {
+        if (product.campusId === chosenCampus.id) atCampus.push(product)
+        else if (product.campusStateId === chosenCampus.stateId) {
+          inState.push(product)
+        } else elsewhere.push(product)
+      }
+      /* Skip headings for empty groups; the chosen-campus group is the
+         "matching" group — when it is empty the notice explains why the
+         visible items come from other places */
+      const groups: ResultGroup[] = []
+      if (atCampus.length > 0) {
+        groups.push({
+          heading: `${itemLabel} at ${chosenCampus.name}`,
+          products: atCampus,
+        })
+      }
+      if (inState.length > 0) {
+        groups.push({
+          heading: `Also in ${chosenCampus.stateName}`,
+          products: inState,
+        })
+      }
+      if (elsewhere.length > 0) {
+        groups.push({ heading: 'In other places', products: elsewhere })
+      }
+      if (groups.length === 0) return null
+      return {
+        notice: atCampus.length === 0,
+        noticeTitle: `No ${itemLabel} at ${chosenCampus.name} yet.`,
+        noticeHint: `Here are ${itemLabel} from other places:`,
+        groups,
+      }
+    }
+
+    if (filters.stateId !== 'all' && chosenStateName) {
+      const inState: Product[] = []
+      const elsewhere: Product[] = []
+      for (const product of items) {
+        if (product.campusStateId === filters.stateId) inState.push(product)
+        else elsewhere.push(product)
+      }
+      const groups: ResultGroup[] = []
+      if (inState.length > 0) {
+        groups.push({
+          heading: `${itemLabel} in ${chosenStateName}`,
+          products: inState,
+        })
+      }
+      if (elsewhere.length > 0) {
+        groups.push({ heading: 'In other places', products: elsewhere })
+      }
+      if (groups.length === 0) return null
+      return {
+        notice: inState.length === 0,
+        noticeTitle: `No ${itemLabel} in ${chosenStateName} yet.`,
+        noticeHint: `Here are ${itemLabel} from other places:`,
+        groups,
+      }
+    }
+
+    /* No location chosen: one list, no scope headings */
+    return {
+      notice: false,
+      noticeTitle: '',
+      noticeHint: '',
+      groups: [{ heading: '', products: items }],
+    }
+  }, [
+    completed.state,
+    completed.items,
+    chosenCampus,
+    chosenStateName,
+    filters.stateId,
+    itemLabel,
+  ])
 
   if (!isSupabaseConfigured) {
     return <SetupNotice />
   }
-
-  /* Empty state, most specific honest message first, per product rules:
-     search/category/other filters → unavailable message; an empty
-     campus or state → the location-specific message naming the state. */
-  const stateName =
-    directory.find((entry) => entry.stateId === filters.stateId)?.stateName
-  const emptyMessage = (() => {
-    if (
-      search.trim() !== '' ||
-      filters.categoryId !== 'all' ||
-      filters.subCategoryId !== 'all' ||
-      filters.condition !== 'all' ||
-      filters.minPrice !== null ||
-      filters.maxPrice !== null ||
-      filters.inStock
-    ) {
-      return 'Sorry, this item is currently unavailable.'
-    }
-    if (filters.campusId !== 'all') {
-      return 'Sorry, no products are currently available on this campus yet.'
-    }
-    if (filters.stateId !== 'all') {
-      return `Sorry, no products are currently available in ${stateName ?? 'this state'}.`
-    }
-    return 'No items here yet. Be the first to sell on this campus.'
-  })()
-  /* How the recommendations strip is introduced under an empty result */
-  const recommendationsHeading = (() => {
-    if (
-      search.trim() === '' &&
-      filters.categoryId === 'all' &&
-      filters.subCategoryId === 'all' &&
-      filters.condition === 'all' &&
-      filters.minPrice === null &&
-      filters.maxPrice === null &&
-      !filters.inStock
-    ) {
-      return 'Recommended Products from Other Locations'
-    }
-    return 'Recommended Products'
-  })()
 
   return (
     <div className="min-h-dvh bg-surface">
@@ -796,11 +855,9 @@ export default function App() {
               categoryId,
               subCategoryId: 'all',
             }))
-            setExpanded(false)
           }}
           onSub={(subCategoryId) => {
             setFilters((prev) => ({ ...prev, subCategoryId }))
-            setExpanded(false)
           }}
         />
 
@@ -880,7 +937,7 @@ export default function App() {
               </section>
             )}
 
-            {/* All items with filters applied, paginated */}
+            {/* All items with filters applied, grouped matching-first */}
             {!listingLoading && completed.state === 'ok' && (
               <section aria-labelledby="catalog-heading">
                 <div className="mb-2 flex items-baseline justify-between">
@@ -890,49 +947,96 @@ export default function App() {
                   >
                     All items
                   </h2>
-                  {mode === 'near' && chosenCampus ? (
+                  {/* The RPC returns no exact total: "N+" while more pages
+                      may exist, exact count once the last page is loaded */}
+                  {completed.items.length > 0 && (
                     <p className="text-xs text-ink/60" aria-live="polite">
-                      Also showing other campuses in {chosenCampus.stateName}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-ink/60" aria-live="polite">
-                      {completed.total}{' '}
-                      {completed.total === 1 ? 'item' : 'items'} found
+                      {completed.items.length}
+                      {completed.hasMore ? '+' : ''}{' '}
+                      {completed.items.length === 1 ? 'item' : 'items'} found
                     </p>
                   )}
                 </div>
-                <ProductGrid
-                  products={completed.items}
-                  emptyMessage={emptyMessage}
-                  onClearFilters={filtersActive ? clearAllFilters : undefined}
-                />
 
-                {/* Recommendations only under a genuinely EMPTY result —
-                    when matches exist, results stand alone (Scenario B). */}
+                {/* Matching group empty but other scopes have rows → notice
+                    at the top, then the other groups */}
+                {resultGroups?.notice && (
+                  <div className="mb-3 rounded-lg border border-dashed border-border bg-white px-4 py-3 text-center">
+                    <p className="text-sm font-medium text-ink">
+                      {resultGroups.noticeTitle}
+                    </p>
+                    <p className="mt-0.5 text-xs text-ink/60">
+                      {resultGroups.noticeHint}
+                    </p>
+                  </div>
+                )}
+
+                {/* Scope groups (heading skipped for the unscoped list) */}
+                {resultGroups &&
+                  resultGroups.groups.map((group, index) => (
+                    <div
+                      key={group.heading !== '' ? group.heading : `list-${index}`}
+                      className={index > 0 ? 'mt-4' : ''}
+                    >
+                      {group.heading !== '' && (
+                        <h3 className="mb-2 text-sm font-bold text-ink">
+                          {group.heading}
+                        </h3>
+                      )}
+                      <ProductGrid products={group.products} />
+                    </div>
+                  ))}
+
+                {/* NO rows at all: the empty message FIRST, then the labelled
+                    recommendations — never blended into any results grid */}
+                {completed.items.length === 0 && (
+                  <section className="rounded-lg border border-dashed border-border bg-white px-4 py-10 text-center">
+                    <p className="text-2xl" aria-hidden="true">
+                      🛒
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-ink">
+                      No {itemLabel} available on Wemart yet.
+                    </p>
+                    <p className="mt-1 text-xs text-ink/60">
+                      Here are some other items you might like:
+                    </p>
+                    {filtersActive && (
+                      <button
+                        type="button"
+                        onClick={clearAllFilters}
+                        className="hard-shadow mt-3 rounded-lg bg-orange px-4 py-2 text-sm font-bold text-ink transition hover:bg-orange-deep hover:text-white active:translate-x-0.5 active:translate-y-0.5 active:shadow-none motion-reduce:active:translate-y-0 motion-reduce:active:translate-y-0"
+                      >
+                        Clear filters
+                      </button>
+                    )}
+                  </section>
+                )}
+
+                {/* The recommendations section itself: clearly labelled,
+                    every card keeping its own campus + state line */}
                 {completed.items.length === 0 &&
                   suggestions &&
                   suggestions.length > 0 && (
                   <section
-                    aria-labelledby="suggestions-heading"
+                    aria-labelledby="recommendations-heading"
                     className="mt-4 border-t border-border pt-4"
                   >
                     <h2
-                      id="suggestions-heading"
-                      className="mb-1 text-sm font-bold text-ink"
+                      id="recommendations-heading"
+                      className="mb-1 text-sm font-bold text-ink sm:text-base"
                     >
-                      {recommendationsHeading}
+                      Recommended for you
                     </h2>
                     <p className="mb-2 text-[11px] text-ink/60">
-                      {recommendationsHeading ===
-                      'Recommended Products from Other Locations'
-                        ? 'Available items from other campuses — the actual location is shown on every card.'
-                        : 'Available now — ranked by proximity first, then cheapest price first.'}
+                      Picks from Wemart based on your location — not part of
+                      your search. Each card shows its own campus and state.
                     </p>
                     <ProductGrid products={suggestions} compact />
                   </section>
                 )}
 
-                {completed.items.length < completed.total && (
+                {/* "Load more" continues the same ordered list */}
+                {completed.hasMore && (
                   <div className="mt-3 flex justify-center">
                     <button
                       type="button"
@@ -943,31 +1047,6 @@ export default function App() {
                       {loadingMore ? 'Loading…' : 'Load more'}
                     </button>
                   </div>
-                )}
-
-                {/* Nearby expansion under the results */}
-                {mode === 'campus' && chosenCampus && (
-                  <p className="mt-2 text-center text-[11px] text-ink/60">
-                    <button
-                      type="button"
-                      onClick={() => setExpanded(true)}
-                      className="underline transition hover:text-orange-deep"
-                    >
-                      Also show other campuses in {chosenCampus.stateName}
-                    </button>
-                  </p>
-                )}
-                {mode === 'near' && chosenCampus && (
-                  <p className="mt-2 text-center text-[11px] text-ink/60">
-                    Showing other campuses in {chosenCampus.stateName} too —{' '}
-                    <button
-                      type="button"
-                      onClick={() => setExpanded(false)}
-                      className="underline transition hover:text-orange-deep"
-                    >
-                      show only {chosenCampus.name}
-                    </button>
-                  </p>
                 )}
               </section>
             )}
@@ -997,7 +1076,6 @@ export default function App() {
           onApply={(next) => {
             setFilters(next)
             setFilterSheetOpen(false)
-            setExpanded(false)
           }}
           onClose={() => setFilterSheetOpen(false)}
         />

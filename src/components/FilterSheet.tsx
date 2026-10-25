@@ -8,6 +8,9 @@ import type {
 } from '../types'
 import { DEFAULT_FILTERS } from '../types'
 
+/** Campus lists longer than this get the "Find your campus" filter box */
+const FIND_THRESHOLD = 10
+
 type Props = {
   directory: CampusDirectoryEntry[]
   categories: CategoryRef[]
@@ -55,6 +58,8 @@ export default function FilterSheet({
 }: Props) {
   const [draft, setDraft] = useState<Filters>(value)
   const panelRef = useRef<HTMLDivElement>(null)
+  /* "Find your campus" filters the campus select below as the user types */
+  const [campusQuery, setCampusQuery] = useState('')
 
   useEffect(() => {
     panelRef.current?.focus()
@@ -77,6 +82,31 @@ export default function FilterSheet({
     if (draft.stateId === 'all') return directory
     return directory.filter((entry) => entry.stateId === draft.stateId)
   }, [directory, draft.stateId])
+
+  /* "Find your campus": only narrows the <option> list, never the choice */
+  const findTerm = campusQuery.trim().toLowerCase()
+  const shownCampuses = findTerm
+    ? campuses.filter((campus) =>
+        campus.name.toLowerCase().includes(findTerm),
+      )
+    : campuses
+
+  /* All-states lists group campuses under their state (optgroups) */
+  const campusGroups = useMemo(() => {
+    if (draft.stateId !== 'all') return []
+    const map = new Map<string, CampusDirectoryEntry[]>()
+    for (const campus of shownCampuses) {
+      const list = map.get(campus.stateId)
+      if (list) list.push(campus)
+      else map.set(campus.stateId, [campus])
+    }
+    const groups = [...map].map(([stateId, list]) => ({
+      stateId,
+      stateName: list[0]?.stateName ?? '',
+      campuses: list,
+    }))
+    return groups.sort((a, b) => a.stateName.localeCompare(b.stateName))
+  }, [shownCampuses, draft.stateId])
 
   const chosenTop = categories.find(
     (category) =>
@@ -132,7 +162,10 @@ export default function FilterSheet({
             <span className="mb-1 block text-xs font-semibold text-ink">State</span>
             <select
               value={draft.stateId}
-              onChange={(e) => update({ stateId: e.target.value, campusId: 'all' })}
+              onChange={(e) => {
+                setCampusQuery('')
+                update({ stateId: e.target.value, campusId: 'all' })
+              }}
               className={selectClass}
             >
               <option value="all">All states</option>
@@ -144,19 +177,48 @@ export default function FilterSheet({
             </select>
           </label>
 
+          {campuses.length > FIND_THRESHOLD && (
+            <label className="block">
+              <span className="sr-only">Find your campus</span>
+              <input
+                type="search"
+                value={campusQuery}
+                onChange={(e) => setCampusQuery(e.target.value)}
+                placeholder="Find your campus"
+                autoComplete="off"
+                className={numberInputClass}
+              />
+            </label>
+          )}
+
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-ink">Campus</span>
             <select
               value={draft.campusId}
-              onChange={(e) => update({ campusId: e.target.value })}
+              onChange={(e) => {
+                setCampusQuery('')
+                update({ campusId: e.target.value })
+              }}
               className={selectClass}
             >
               <option value="all">All campuses</option>
-              {campuses.map((campus) => (
-                <option key={campus.id} value={campus.id}>
-                  {campus.name}
-                </option>
-              ))}
+              {draft.stateId === 'all' ? (
+                campusGroups.map((group) => (
+                  <optgroup key={group.stateId} label={group.stateName}>
+                    {group.campuses.map((campus) => (
+                      <option key={campus.id} value={campus.id}>
+                        {campus.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))
+              ) : (
+                shownCampuses.map((campus) => (
+                  <option key={campus.id} value={campus.id}>
+                    {campus.name}
+                  </option>
+                ))
+              )}
             </select>
           </label>
 

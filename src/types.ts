@@ -90,6 +90,8 @@ export type Product = {
   imageAlt?: string
   /** Vendor display name (public info from the catalog view) */
   vendor: string
+  /** Campus id of the offer (catalog `campus_id`) — used for scope grouping */
+  campusId?: string
   /** Campus display name (catalog view `campus_name`) */
   campusName?: string
   /** Parent state of the campus (catalog view `campus_state_id/name`) */

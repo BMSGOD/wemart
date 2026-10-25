@@ -11,11 +11,13 @@ import type {
  * goes through here.
  *
  * Read-only contract (never loosen this from the browser):
- * - products: ONLY the `catalog` view (one row per offer).
+ * - products: ONLY via the `catalog_search` RPC (reads the catalog view
+ *   server-side, one row per offer, tier-ordered same campus → same
+ *   state → everywhere else). The catalog view is never queried from
+ *   the browser directly.
  * - locations: ONLY the `campus_directory` view — the app uses a
  *   STATE → CAMPUS model with no city/region tiers.
  * - categories: `categories` where is_active = true.
- * - nearby discovery: the `catalog_near_campus` RPC.
  * - NEVER query vendors, vendor_locations, buyers, orders or payments
  *   from the browser. The catalog view's `city`/`state` columns are
  *   IGNORED — location comes from campus + campus_state columns only.
@@ -35,7 +37,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Columns of the `catalog` view (verified live) — one row per offer. */
+/** Columns of a `catalog_search` row (the live catalog view shape). */
 export type CatalogRow = {
   offer_id: string
   product_id: string
@@ -64,30 +66,6 @@ export type CatalogRow = {
   image_alt: string | null
   listed_at: string
 }
-
-const CATALOG_COLUMNS = [
-  'offer_id',
-  'product_id',
-  'variant_id',
-  'product_name',
-  'variant_name',
-  'description',
-  'product_condition',
-  'price',
-  'available_quantity',
-  'category_id',
-  'category_name',
-  'vendor_id',
-  'vendor_name',
-  'vendor_location_id',
-  'campus_id',
-  'campus_name',
-  'campus_state_id',
-  'campus_state_name',
-  'image_path',
-  'image_alt',
-  'listed_at',
-].join(',')
 
 const CONDITION_VALUES: Condition[] = [
   'new',
@@ -139,6 +117,8 @@ function rowToProduct(row: CatalogRow): Product {
     imageUrl: getPublicImageUrl(row.image_path ?? null),
     imageAlt: row.image_alt ?? undefined,
     vendor: row.vendor_name,
+    /* Campus id for result scope grouping (may be absent on data-gap rows) */
+    campusId: row.campus_id ?? undefined,
     /* Location card line: campus + its parent state, e.g. "ABU, Kaduna".
        (`city`/`state` columns are deliberately not read.) */
     campusName: row.campus_name ?? undefined,
@@ -231,8 +211,6 @@ export type CatalogQuery = {
   maxPrice?: number
   inStock?: boolean
   search?: string
-  /** Offer ids to drop from the result (e.g. already-visible items) */
-  excludeIds?: string[]
   sort?: 'newest' | 'price-asc' | 'price-desc'
   limit?: number
   offset?: number
@@ -240,19 +218,20 @@ export type CatalogQuery = {
 
 export type CatalogPage = {
   items: Product[]
-  /** Exact total matching the filters, when the endpoint provides one */
+  /**
+   * The RPC returns no exact count — this counts the rows loaded so far
+   * (offset + rows of the latest page). Pair it with `hasMore`.
+   */
   total: number
-}
-
-/** ilike treats % _ \ as pattern chars — strip them from user input. */
-function escapeLikePattern(term: string): string {
-  return term.replace(/[%_\\]/g, '\\$&')
+  /** True when the latest page came back full — "Load more" may exist */
+  hasMore: boolean
 }
 
 /**
- * One page of catalog offers: campus / state + category + name search
- * filters (AND), newest list date first, exact count for pagination.
- * Campus beats state: when both arrive, only campus_id is applied.
+ * One page of catalog offers through the `catalog_search` RPC — the ONLY
+ * product query. All filters are applied server-side (AND); rows come
+ * back tier-ordered: chosen campus first, then the same state, then
+ * everywhere else (within each tier, the p_sort ordering applies).
  */
 export async function getCatalog(
   query: CatalogQuery = {},
@@ -271,65 +250,33 @@ export async function getCatalog(
     maxPrice,
     inStock,
     search,
-    excludeIds,
-    sort,
+    sort = 'newest',
     limit = 24,
     offset = 0,
   } = query
 
-  let request = client
-    .from('catalog')
-    .select(CATALOG_COLUMNS, { count: 'exact' })
-
-  /* Drop already-visible offers (used by recommendations to avoid
-     duplicating the "New arrivals" strip on screen) */
-  if (excludeIds && excludeIds.length > 0) {
-    request = request.not('offer_id', 'in', `(${excludeIds.join(',')})`)
-  }
-
-  if (campusId) {
-    request = request.eq('campus_id', campusId)
-  } else if (stateId) {
-    request = request.eq('campus_state_id', stateId)
-  }
-  /* Strict database-side category filtering: a top-level selection
-     matches itself AND its children via IN; a sub-category matches only
-     itself (items without a category only ever appear under "All")
-     — never filtered in the browser afterwards. */
-  if (categoryIds && categoryIds.length > 0) {
-    request = request.in('category_id', categoryIds)
-  }
-  if (condition) request = request.eq('product_condition', condition)
-  if (typeof minPrice === 'number') request = request.gte('price', minPrice)
-  if (typeof maxPrice === 'number') request = request.lte('price', maxPrice)
-  if (inStock) request = request.gt('available_quantity', 0)
-  const term = (search ?? '').trim()
-  if (term) {
-    request = request.ilike(
-      'product_name',
-      `%${escapeLikePattern(term)}%`,
-    )
-  }
-  /* Every sort keeps a deterministic tiebreaker chain so "Load more"
-     pages stay stable as filters combine */
-  if (sort === 'price-asc') {
-    request = request
-      .order('price', { ascending: true })
-      .order('listed_at', { ascending: false })
-      .order('offer_id', { ascending: false })
-  } else if (sort === 'price-desc') {
-    request = request
-      .order('price', { ascending: false })
-      .order('listed_at', { ascending: false })
-      .order('offer_id', { ascending: false })
-  } else {
-    request = request
-      .order('listed_at', { ascending: false })
-      .order('offer_id', { ascending: false })
-  }
-  request = request.range(offset, offset + limit - 1)
-
-  const { data, error, count } = await request
+  const { data, error } = await client.rpc('catalog_search', {
+    p_campus_id: campusId ?? null,
+    p_state_id: stateId ?? null,
+    /* A top-level selection arrives expanded (top + children); a
+       sub-category arrives as the single id. Strict, database-side. */
+    p_category_ids:
+      categoryIds && categoryIds.length > 0 ? categoryIds : null,
+    /* Matches product names AND category names server-side */
+    p_search: (search ?? '').trim() || null,
+    p_condition: condition ?? null,
+    p_min_price: typeof minPrice === 'number' ? minPrice : null,
+    p_max_price: typeof maxPrice === 'number' ? maxPrice : null,
+    p_in_stock_only: Boolean(inStock),
+    p_sort:
+      sort === 'price-asc'
+        ? 'price_asc'
+        : sort === 'price-desc'
+          ? 'price_desc'
+          : 'newest',
+    p_limit: limit,
+    p_offset: offset,
+  })
   if (error) {
     throw new ApiError(`Could not load items: ${error.message}`, error)
   }
@@ -337,108 +284,32 @@ export async function getCatalog(
   const rows = (data ?? []) as unknown as CatalogRow[]
   return {
     items: rows.map(rowToProduct),
-    total: count ?? offset + rows.length,
-  }
-}
-
-/**
- * Nearby discovery via the `catalog_near_campus` RPC: rows ordered by the
- * same campus first, then campuses in the same state, then everything
- * else — newest list date first within each tier. Used for the
- * "Also show other campuses in {state}" expansion. No category filter
- * exists on the function, so it is only used without category filters.
- */
-export async function getNearCampus(query: {
-  campusId: string
-  search?: string
-  limit?: number
-  offset?: number
-}): Promise<CatalogPage> {
-  const client = getSupabase()
-  if (!client) {
-    throw new ApiError('Wemart is not connected to its database yet.')
-  }
-
-  const {
-    campusId,
-    search,
-    limit = 24,
-    offset = 0,
-  } = query
-
-  const { data, error } = await client.rpc('catalog_near_campus', {
-    p_campus_id: campusId,
-    p_search: (search ?? '').trim() || null,
-    p_limit: limit,
-    p_offset: offset,
-  })
-  if (error) {
-    throw new ApiError(`Could not load nearby items: ${error.message}`, error)
-  }
-
-  const rows = (data ?? []) as unknown as CatalogRow[]
-  /* The RPC returns no exact count — pagination uses "have more rows"
-     heuristics on the offset (fewer rows than requested = end of list). */
-  return {
-    items: rows.map(rowToProduct),
     total: offset + rows.length,
+    /* A full page may have a follow-up; a short page is the end. */
+    hasMore: rows.length === limit,
   }
 }
 
 /**
- * Recommendation pool for empty filtered views: genuinely available offers
- * (available_quantity > 0) from ANY category, ranked by proximity tier
- * first and cheapest price second:
- *   tier 1 — the user's selected campus,
- *   tier 2 — other campuses in the user's selected state,
- *   tier 3 — everywhere else.
- * Tiers use the location hierarchy ONLY (campus → state → nationwide) and
- * never claim geographic distance. Search/category/condition filters are
- * deliberately dropped here; duplicates are removed by offer id. Card
- * location labels stay truthful per card.
+ * Fallback pool for an empty filtered view: ONE `catalog_search` call
+ * with the location filters ONLY (no category, search, condition, price
+ * or stock filters), so the RPC's own tier ordering (same campus → same
+ * state → everywhere else) supplies the proximity ranking. Every card
+ * keeps its true campus/state labels — recommendations are never
+ * relabelled, and they are never blended into matching results.
  */
 export async function getRecommended(
   query: {
     campusId?: string
     stateId?: string
-    /** Offers already on screen (e.g. "New arrivals") — excluded */
-    excludeIds?: string[]
     limit?: number
   } = {},
 ): Promise<Product[]> {
-  const limit = query.limit ?? 12
-
-  const fetchTier = async (tier: {
-    campusId?: string
-    stateId?: string
-  }): Promise<Product[]> => {
-    const page = await getCatalog({
-      ...tier,
-      inStock: true,
-      sort: 'price-asc',
-      excludeIds: query.excludeIds,
-      limit,
-    })
-    return page.items
-  }
-
-  /* Tiers run sequentially so an exhausted earlier tier still fills the
-     pool from the next one; dedupe keeps the strict rank order. */
-  const seen = new Set<string>()
-  const out: Product[] = []
-  const tiers: Array<{ campusId?: string; stateId?: string }> = []
-  if (query.campusId) tiers.push({ campusId: query.campusId })
-  if (query.stateId) tiers.push({ stateId: query.stateId })
-  tiers.push({})
-
-  for (const tier of tiers) {
-    const items = await fetchTier(tier)
-    for (const product of items) {
-      if (seen.has(product.id)) continue
-      seen.add(product.id)
-      out.push(product)
-      if (out.length >= limit) return out
-    }
-  }
-  return out
+  const page = await getCatalog({
+    /* Campus beats state — the tier ordering covers the state too */
+    campusId: query.campusId,
+    stateId: query.campusId ? undefined : query.stateId,
+    limit: query.limit ?? 12,
+  })
+  return page.items
 }
