@@ -1,14 +1,21 @@
-import { CAMPUSES } from '../data/campuses'
 import { useId } from 'react'
+import type { Campus } from '../types'
 
 type Props = {
+  /** Campus list loaded from the DB (locations where location_type='campus') */
+  campuses: Campus[]
   value: string
   onChange: (campusId: string) => void
   /** Smaller variant for the sticky header */
   compact?: boolean
 }
 
-export default function CampusPicker({ value, onChange, compact = false }: Props) {
+export default function CampusPicker({
+  campuses,
+  value,
+  onChange,
+  compact = false,
+}: Props) {
   const id = useId()
 
   return (
@@ -34,9 +41,9 @@ export default function CampusPicker({ value, onChange, compact = false }: Props
         }`}
       >
         <option value="all">All campuses</option>
-        {CAMPUSES.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
+        {campuses.map((campus) => (
+          <option key={campus.id} value={campus.id}>
+            {campus.name}
           </option>
         ))}
       </select>

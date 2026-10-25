@@ -15,10 +15,7 @@ export default function ProductGrid({ products, compact = false }: Props) {
           🛒
         </p>
         <p className="mt-2 text-sm font-medium text-ink">
-          No items match your filters
-        </p>
-        <p className="text-xs text-ink/60">
-          Try another campus, category, or search term.
+          No items here yet. Be the first to sell on this campus.
         </p>
       </div>
     )

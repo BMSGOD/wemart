@@ -4,7 +4,7 @@
 
 ## What this is
 
-Mobile-first **Nigerian** campus marketplace (buy/sell on university campuses, prices in naira). **Static build only — no backend.** Data is hardcoded sample data; there are no API calls, env vars, or secrets anywhere yet; no Supabase client is installed.
+Mobile-first **Nigerian** campus marketplace (buy/sell on university campuses, prices in naira). **Frontend connected to Supabase (read-only)**: when `VITE_SUPABASE_URL` + `VITE_SUPABASE_KEY` are set (`.env.local`, never committed), all listings come from the `catalog` database **view** (one row per offer) and campuses/categories from their own small queries; when either variable is missing the app shows a friendly "**Wemart is being set up**" screen (`SetupNotice.tsx`) instead of attempting broken calls. Prices are in naira and render **as-is, never divided**. **Publishable (anon) key ONLY — never a service_role or secret key in the bundle.** No login, cart or checkout yet.
 
 - Stack: Vite 8 + React 19 + TypeScript 6, Tailwind CSS **v4** (plugin `@tailwindcss/vite` in `vite.config.ts`; styling entry is `@import "tailwindcss"` in `src/index.css` — there is **no `tailwind.config.*` file and none should be added**)
 - Deploy target: Cloudflare **Workers** static assets (`npx wrangler deploy`; config in `wrangler.toml` with `not_found_handling = "single-page-application"`). `npm run build` → `dist/`. There is **no `public/_redirects` file** — a catch-all SPA rule like `/* /index.html 200` fails Workers validation with "Infinite loop detected"; never recreate it. (Cloudflare *Pages* would still work via `npx wrangler pages deploy dist`, where `_redirects` is the fallback — but the current pipeline is Workers)
@@ -22,12 +22,15 @@ There is no test framework and **no CI** (no `.github/`) by design in v1. Don't 
 
 ## Structure
 
-- `src/types.ts` — `Product`, `Campus`, `Category`, `Condition`, `Availability`; `CATEGORIES` array is the single source for category lists
-- `src/data/` — **sample data only.** `data/sample-data.ts` re-exports `campuses.ts` + `products.ts`; **only `src/lib/catalog.ts` may import sample data.** Components must call `searchProducts` / `getFeatured` from the catalog layer — never read the data arrays directly. When Supabase is integrated later (schema + policies finalized first), only `catalog.ts` changes
-- `src/components/` — `App.tsx` composes filters (campus + search + category, all AND-combined via one `searchProducts` call in a `useMemo`). Adding a filter means: state in `App.tsx`, inside `catalogQuery`, component in `components/`. `Header.tsx` owns the sticky header (logo, campus selector, cart); `BottomNav.tsx` owns the mobile bottom nav — there is no hamburger menu
-- Product fields: `campus` must be a `Campus.id`, `category` one of `CATEGORIES`, `condition` is `'new' | 'like-new' | 'used'`, `availability` is `'available' | 'reserved' | 'sold'`, `featured` picks items for the Featured row. Typos in these string fields silently filter out items instead of erroring — the compiler does not catch them
-- Prices are Nigerian naira (`NGN` via `Intl.NumberFormat('en-NG')` in `ProductCard`)
-- UI is emoji placeholders in cards — real image assets don't exist yet; brand assets live in `public/` (`wemart-logo.png`, favicons)
+- `src/types.ts` — `Product`, `Campus`, `CategoryRef`, `Condition` (`'new' | 'used' | 'refurbished' | 'other'` live DB values; `'like-new'` exists only in sample data), `Availability`. No derived `CATEGORIES` constant — category chips load from the DB
+- `src/data/api.ts` — the **ONLY** data-access layer. `getCampuses()` (locations where `location_type='campus'`), `getCategories()` (categories where `is_active = true`), `getCatalog({campusId, categoryId, search, limit=24, offset=0})` reading **only the `catalog` view**: `eq` filters, `ilike` on `product_name` with `%`/`_`/`\` escaped, sorted by `listed_at` desc, paged via `range()`, `count: 'exact'` totals. All snake_case→camelCase mapping lives in `rowToProduct` in this one file. Images are resolved via `supabase.storage.from('product-images').getPublicUrl(image_path)`
+- `src/data/products.ts`, `campuses.ts`, `sample-data.ts` — **retained for reference only; nothing renders them anymore** (the DB path + setup screen replaced the sample-data fallback)
+- `src/lib/supabase.ts` — the single place the Supabase browser client is created. Reads `VITE_SUPABASE_URL` + `VITE_SUPABASE_KEY` (publishable/anon key ONLY — never a service_role or secret key). When unset, `isSupabaseConfigured` is false and `App` renders the setup screen
+- `database/0001_product_discovery_review.sql` — REVIEW-ONLY historical draft (Parts A/A2 read-only inspection queries, minimum-safe RLS policies, and a `product_discovery` view sketch). SUPERSEDED: the live project now serves discovery through the verified `catalog` view, which is what the frontend reads. The inspection queries (Part A/A2) are still useful read-only tools; the DDL drafts must not be run without re-review against the live `catalog` definition
+- `src/components/` — `App.tsx` composes filters (campus + search + category, AND-combined into one `getCatalog` call), owns the 300ms debounce and pagination ("Load more") state. Adding a filter means: state in `App.tsx`, inside `catalogFilters`, component in `components/`. `Header.tsx` owns the sticky header (logo, campus selector, cart); `BottomNav.tsx` owns the mobile bottom nav — there is no hamburger menu
+- Product fields come from the `catalog` view: `condition` is `'new' | 'used' | 'refurbished' | 'other'` (unknown values collapse to `'other'` in `api.ts`), availability is derived from `available_quantity` (> 0 → "In stock", else "Sold out"), and one card = one **offer** (multi-variant products can appear as several cards). There is **no verified or featured flag yet** — the green vendor check icon was removed
+- Prices are Nigerian naira directly from the view (`Intl.NumberFormat('en-NG')`, NGN, 0 fraction digits — `price` is naira, not kobo; **no division**)
+- UI cards show a real Storage photo when the row has `image_path` — otherwise the CSS emoji placeholder; brand assets live in `public/` (`wemart-logo.png`, favicons)
 - Single page, no router. Only add `react-router` (or similar) if a page beyond home is needed; the SPA fallback comes from `wrangler.toml` (`not_found_handling`), so direct-opened/refreshed URLs resolve on the deployed site
 
 ## Design
@@ -53,13 +56,19 @@ Rules (all intentional — keep consistent):
 - **One radius for cards and buttons: 8px** (`rounded-lg`). Pill shape only for category chips.
 - **Primary button**: `bg-orange text-ink`; hover `bg-orange-deep text-white`. The hard shadow stays on hover and collapses on press (`active:translate + shadow-none`). **Text on orange backgrounds is always Ink `#181311`, never white.** Any orange text on white uses `orange-deep`.
 - **Layout**: sticky header (logo, campus selector, cart); compact hero with headline "Discover on Wemart.", supporting line, large campus picker, search box, "Sell an item" primary button — all above the fold on a phone; horizontally scrolling category chips; product grid 2 columns on phones, 3–4 on wider screens; mobile-only bottom nav (Home, Browse, Sell, Orders, Me).
-- **Product cards**: CSS emoji placeholder (no external image URLs), name, **plain bold price in ink under the name**, condition tag, vendor shop name with a small green check icon for verified vendors, availability marker — green "In stock" for available, neutral for reserved/sold.
+- **Product cards**: real Storage photo when `image_path` exists (lazy, width/height set, broken URLs degrade to the placeholder), otherwise CSS emoji placeholder; product name (+ variant name when present), **plain bold price in ink under the name**, condition tag (New / Used / Refurbished / Other), vendor shop name, campus-or-location name, availability marker — green "In stock" for in-stock, neutral "Sold out" otherwise. No verified check icon (no flag exists yet). Empty grid says "No items here yet. Be the first to sell on this campus."; "Featured" was replaced by "New arrivals" (latest 4 items)
 - **A11y/perf**: global visible `:focus-visible` outline (ink); `prefers-reduced-motion` disables transitions/animations; the page stays light for mobile data (no image URLs, self-hosted subsets only).
 - The cart is intentionally an empty-state panel — **no fake checkout flows** (see Rules).
 
 ## Rules
 
-- **Frontend first; do not connect Supabase yet.** The provider will finalize the DB schema and security policies first. Also do not create databases or project scaffolds
+- **Data rules (binding for any future change):**
+  - Prices are naira. Render `price` as-is through `Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 })` — **no division, no kobo conversion**
+  - Products are read ONLY from the `catalog` **view** (one row per offer) via `src/data/api.ts`. Campuses come from `locations` (`location_type='campus'`) and categories from `categories` (`is_active = true`) — and nothing else
+  - **Never read `vendors`, `vendor_locations`, `buyers`, `orders` or `payments` from the browser.** Public vendor display info arrives pre-joined in the view
+  - There are no verified or featured flags yet; do not invent them in the UI
+  - Use the **publishable (anon) key only. The service_role key must never appear in `src/`, `.env.example`, or any `VITE_` variable** — that would leak admin access in the public bundle
+- **Supabase is connected (read-only) but live data is UNVERIFIED end-to-end.** The frontend reads only the `catalog` view + `locations`/`categories`; do not claim live listings work in a report until a real query returns data in a deployed session. Never run destructive SQL on the live project from this repo; never disable RLS
 - **Do not implement payment processing or pretend transactions are real.** No fake checkout flows
 - **Never put secret keys anywhere in `src/` — everything becomes public in the `dist/` bundle.** If an API key is ever needed, keep it behind a Cloudflare Worker/proxy, not the front end. `VITE_`-prefixed env vars are also public
 - Mobile-first: design for phones first, add `sm:`/`lg:` breakpoints upward (existing components follow this)

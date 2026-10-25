@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CampusPicker from './CampusPicker'
+import type { Campus } from '../types'
 
 const NAV_LINKS = [
   { label: 'Home', href: '#' },
@@ -10,11 +11,12 @@ const NAV_LINKS = [
 ]
 
 type Props = {
+  campuses: Campus[]
   campus: string
   onCampusChange: (campusId: string) => void
 }
 
-export default function Header({ campus, onCampusChange }: Props) {
+export default function Header({ campuses, campus, onCampusChange }: Props) {
   const [cartOpen, setCartOpen] = useState(false)
 
   return (
@@ -31,7 +33,12 @@ export default function Header({ campus, onCampusChange }: Props) {
         </a>
 
         {/* Campus selector lives in the sticky header on every screen size */}
-        <CampusPicker value={campus} onChange={onCampusChange} compact />
+        <CampusPicker
+          campuses={campuses}
+          value={campus}
+          onChange={onCampusChange}
+          compact
+        />
 
         {/* Desktop nav */}
         <nav className="ml-auto hidden items-center gap-5 sm:flex" aria-label="Main">
@@ -46,7 +53,7 @@ export default function Header({ campus, onCampusChange }: Props) {
           ))}
         </nav>
 
-        {/* Cart (ops note: no checkout — sample data until the seller tools land) */}
+        {/* Cart (ops note: no checkout — empty-state panel only) */}
         <button
           type="button"
           onClick={() => setCartOpen((open) => !open)}
@@ -77,7 +84,7 @@ export default function Header({ campus, onCampusChange }: Props) {
         >
           <p className="text-sm font-medium text-ink">Your cart is empty.</p>
           <p className="text-xs text-ink/70">
-            Wemart is in demo mode — sample listings only, no checkout yet.
+            No checkout yet — reach out to sellers and meet in person safely.
           </p>
         </div>
       )}

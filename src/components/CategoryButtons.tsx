@@ -1,12 +1,21 @@
-import { CATEGORIES, type Category } from '../types'
+import type { CategoryRef } from '../types'
 
 type Props = {
-  value: Category | 'all'
-  onChange: (category: Category | 'all') => void
+  /** Active category rows loaded from the DB */
+  categories: CategoryRef[]
+  value: string
+  onChange: (categoryId: string) => void
 }
 
-export default function CategoryButtons({ value, onChange }: Props) {
-  const options: Array<Category | 'all'> = ['all', ...CATEGORIES]
+export default function CategoryButtons({
+  categories,
+  value,
+  onChange,
+}: Props) {
+  const options: CategoryRef[] = [
+    { id: 'all', name: 'All' },
+    ...categories,
+  ]
 
   return (
     <div
@@ -14,13 +23,13 @@ export default function CategoryButtons({ value, onChange }: Props) {
       role="group"
       aria-label="Filter by category"
     >
-      {options.map((cat) => {
-        const active = value === cat
+      {options.map((category) => {
+        const active = value === category.id
         return (
           <button
-            key={cat}
+            key={category.id}
             type="button"
-            onClick={() => onChange(cat)}
+            onClick={() => onChange(category.id)}
             aria-pressed={active}
             /* Pill shape only for chips (cards and buttons use 8px) */
             className={`shrink-0 rounded-full px-4 py-1.5 text-sm transition ${
@@ -29,7 +38,7 @@ export default function CategoryButtons({ value, onChange }: Props) {
                 : 'bg-white font-medium text-ink ring-1 ring-border ring-inset hover:bg-orange-tint'
             }`}
           >
-            {cat === 'all' ? 'All' : cat}
+            {category.name}
           </button>
         )
       })}

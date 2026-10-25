@@ -3,40 +3,53 @@ export type Campus = {
   name: string
 }
 
-export type Category =
-  | 'Electronics'
-  | 'Books'
-  | 'Furniture'
-  | 'Fashion'
-  | 'Food'
-  | 'Services'
+/**
+ * A DB category row — `categories` where is_active = true (id + name).
+ * Category chips filter by id, display by name.
+ */
+export type CategoryRef = {
+  id: string
+  name: string
+}
 
-export type Condition = 'new' | 'like-new' | 'used'
+/**
+ * Live catalog values: 'new' | 'used' | 'refurbished' | 'other'.
+ * 'like-new' exists only in the retained sample data (reference-only).
+ */
+export type Condition =
+  | 'new'
+  | 'like-new'
+  | 'used'
+  | 'refurbished'
+  | 'other'
 
 export type Availability = 'available' | 'reserved' | 'sold'
 
 export type Product = {
+  /** Unique card id — a catalog view offer id (one row per offer) */
   id: string
+  /** Product display name */
   title: string
-  price: number /* Nigerian naira */
-  category: Category
-  campus: string /* Campus.id */
+  /** Variant name shown under the product name when present */
+  variantName?: string
+  /** Nigerian naira — the DB value as-is, never divided */
+  price: number
+  /** Category display name (DB `category_name`) */
+  category: string
+  /** Campus/location identifier the offer sits at */
+  campus: string
   condition: Condition
   availability: Availability
   featured?: boolean
   description: string
-  emoji: string /* placeholder image until real listings use uploaded photos */
-  /** Vendor shop display name (sample data; real shops come with accounts later) */
+  emoji: string /* CSS placeholder shown when no storage image exists */
+  /** Public Supabase Storage URL built from the row's image_path */
+  imageUrl?: string
+  imageAlt?: string
+  /** Vendor display name (public info from the catalog view) */
   vendor: string
-  /** Verified vendor flag — shown as a small green check icon next to the shop name */
+  /** Campus name, falling back to the pickup location name */
+  locationName?: string
+  /** Retired: no verified flag exists in the live DB yet */
   verified?: boolean
 }
-
-export const CATEGORIES: Category[] = [
-  'Electronics',
-  'Books',
-  'Furniture',
-  'Fashion',
-  'Food',
-  'Services',
-]
