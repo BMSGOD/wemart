@@ -22,10 +22,11 @@ export default function CategoryButtons({ value, onChange }: Props) {
             type="button"
             onClick={() => onChange(cat)}
             aria-pressed={active}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+            /* Pill shape only for chips (cards and buttons use 8px) */
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm transition ${
               active
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'bg-white text-slate-700 ring-1 ring-slate-300 ring-inset hover:bg-slate-50'
+                ? 'bg-orange font-semibold text-ink'
+                : 'bg-white font-medium text-ink ring-1 ring-border ring-inset hover:bg-orange-tint'
             }`}
           >
             {cat === 'all' ? 'All' : cat}

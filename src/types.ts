@@ -26,6 +26,10 @@ export type Product = {
   featured?: boolean
   description: string
   emoji: string /* placeholder image until real listings use uploaded photos */
+  /** Vendor shop display name (sample data; real shops come with accounts later) */
+  vendor: string
+  /** Verified vendor flag — shown as a green starburst badge on cards */
+  verified?: boolean
 }
 
 export const CATEGORIES: Category[] = [

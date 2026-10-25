@@ -7,7 +7,7 @@
 Mobile-first **Nigerian** campus marketplace (buy/sell on university campuses, prices in naira). **Static build only — no backend.** Data is hardcoded sample data; there are no API calls, env vars, or secrets anywhere yet; no Supabase client is installed.
 
 - Stack: Vite 8 + React 19 + TypeScript 6, Tailwind CSS **v4** (plugin `@tailwindcss/vite` in `vite.config.ts`; styling entry is `@import "tailwindcss"` in `src/index.css` — there is **no `tailwind.config.*` file and none should be added**)
-- Deploy target: Cloudflare Pages (`npm run build` → `dist/`, SPA fallback in `public/_redirects`; deploy with `npx wrangler pages deploy dist`)
+- Deploy target: Cloudflare **Workers** static assets (`npx wrangler deploy`; config in `wrangler.toml` with `not_found_handling = "single-page-application"`). `npm run build` → `dist/`. There is **no `public/_redirects` file** — a catch-all SPA rule like `/* /index.html 200` fails Workers validation with "Infinite loop detected"; never recreate it. (Cloudflare *Pages* would still work via `npx wrangler pages deploy dist`, where `_redirects` is the fallback — but the current pipeline is Workers)
 
 ## Commands
 
@@ -24,11 +24,38 @@ There is no test framework and **no CI** (no `.github/`) by design in v1. Don't 
 
 - `src/types.ts` — `Product`, `Campus`, `Category`, `Condition`, `Availability`; `CATEGORIES` array is the single source for category lists
 - `src/data/` — **sample data only.** `data/sample-data.ts` re-exports `campuses.ts` + `products.ts`; **only `src/lib/catalog.ts` may import sample data.** Components must call `searchProducts` / `getFeatured` from the catalog layer — never read the data arrays directly. When Supabase is integrated later (schema + policies finalized first), only `catalog.ts` changes
-- `src/components/` — `App.tsx` composes filters (campus + search + category, all AND-combined via one `searchProducts` call in a `useMemo`). Adding a filter means: state in `App.tsx`, inside `catalogQuery`, component in `components/`. `Header.tsx` owns the mobile hamburger nav
+- `src/components/` — `App.tsx` composes filters (campus + search + category, all AND-combined via one `searchProducts` call in a `useMemo`). Adding a filter means: state in `App.tsx`, inside `catalogQuery`, component in `components/`. `Header.tsx` owns the sticky header (logo, campus selector, cart); `BottomNav.tsx` owns the mobile bottom nav — there is no hamburger menu
 - Product fields: `campus` must be a `Campus.id`, `category` one of `CATEGORIES`, `condition` is `'new' | 'like-new' | 'used'`, `availability` is `'available' | 'reserved' | 'sold'`, `featured` picks items for the Featured row. Typos in these string fields silently filter out items instead of erroring — the compiler does not catch them
 - Prices are Nigerian naira (`NGN` via `Intl.NumberFormat('en-NG')` in `ProductCard`)
-- UI is emoji placeholders, not images — real image assets don't exist yet
-- Single page, no router. Only add `react-router` (or similar) if a page beyond home is needed; the `_redirects` file already supports it
+- UI is emoji placeholders in cards — real image assets don't exist yet; brand assets live in `public/` (`wemart-logo.png`, favicons)
+- Single page, no router. Only add `react-router` (or similar) if a page beyond home is needed; the SPA fallback comes from `wrangler.toml` (`not_found_handling`), so direct-opened/refreshed URLs resolve on the deployed site
+
+## Design
+
+**Brand tokens** (defined via `@theme` in `src/index.css`; never hardcode hex values in components):
+
+| Token | Value | Use |
+|---|---|---|
+| `orange` | `#EF5B2D` | Primary buttons, price starbursts, active category chips, search icon |
+| `orange-deep` | `#C9411A` | Hover state of primary buttons; any orange text on white |
+| `orange-tint` | `#FDEBE6` | Card image placeholders, decorative starbursts, chip hover |
+| `ink` | `#181311` | Nearly all text; hard offset shadows |
+| `gray-cart` | `#ECECEC` | Cart drawer / neutral filled surfaces |
+| `surface` | `#F7F5F3` | Page background |
+| `border` | `#D9D4CF` | All card/button borders |
+| `green` | `#1B7F46` | In-stock marker, verified-vendor starburst |
+
+Fonts: `@fontsource-variable/bricolage-grotesque` (headlines, `font-display`) and `@fontsource-variable/figtree` (body, `font-sans`) — **self-hosted via Vite bundling; never load fonts from a CDN.** Imports live at the top of `src/index.css` before `@import "tailwindcss"`.
+
+Rules (all intentional — keep consistent):
+- **The memorable element is the 7-point starburst** (matches the logo): `src/components/Starburst.tsx` (inline SVG polygon, color via `currentColor`). Used for price badges, the verified-vendor badge, and one large cropped decorative starburst behind the hero. Some cards may show a green verified starburst.
+- **Hard offset shadow** `3px 3px 0 0 ink`, no blur, no soft grey shadows, no gradients — via the `hard-shadow` utility. Applied to primary buttons (always) and product cards (on hover/press only).
+- **One radius for cards and buttons: 8px** (`rounded-lg`). Pill shape only for category chips.
+- **Primary button**: `bg-orange text-ink`; hover `bg-orange-deep text-white`. The hard shadow stays on hover and collapses on press (`active:translate + shadow-none`). Any orange text on white uses `orange-deep`.
+- **Layout**: sticky header (logo, campus selector, cart); hero with headline "Buy and sell on campus.", large campus picker, search box, "Sell an item" primary button; horizontally scrolling category chips; product grid 2 columns on phones, 3–4 on wider screens; mobile-only bottom nav (Home, Browse, Sell, Orders, Me).
+- **Product cards**: CSS emoji placeholder (no external image URLs), name, price in a starburst badge (`aria-hidden` + `sr-only` full-price line), condition tag, vendor shop name, availability marker — green "In stock" for available, neutral for reserved/sold.
+- **A11y/perf**: global visible `:focus-visible` outline (ink); `prefers-reduced-motion` disables transitions/animations; the page stays light for mobile data (no image URLs, self-hosted subsets only).
+- The cart is intentionally an empty-state panel — **no fake checkout flows** (see Rules).
 
 ## Rules
 

@@ -1,20 +1,37 @@
 import { CAMPUSES } from '../data/campuses'
+import { useId } from 'react'
 
 type Props = {
   value: string
   onChange: (campusId: string) => void
+  /** Smaller variant for the sticky header */
+  compact?: boolean
 }
 
-export default function CampusPicker({ value, onChange }: Props) {
+export default function CampusPicker({ value, onChange, compact = false }: Props) {
+  const id = useId()
+
   return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-600">
+    <div className={compact ? 'max-w-[13rem] flex-1' : 'w-full'}>
+      <label
+        htmlFor={id}
+        className={
+          compact
+            ? 'sr-only'
+            : 'mb-1 block text-sm font-medium text-ink'
+        }
+      >
         Campus
-      </span>
+      </label>
       <select
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base text-slate-900 shadow-sm transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 focus:outline-none"
+        className={`w-full rounded-lg border border-border bg-white text-ink transition hover:border-ink/40 ${
+          compact
+            ? 'px-2 py-1.5 text-xs font-medium'
+            : 'px-3 py-3 text-base font-medium shadow-none focus:border-ink'
+        }`}
       >
         <option value="all">All campuses</option>
         {CAMPUSES.map((c) => (
@@ -23,6 +40,6 @@ export default function CampusPicker({ value, onChange }: Props) {
           </option>
         ))}
       </select>
-    </label>
+    </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CampusPicker from './CampusPicker'
 
 const NAV_LINKS = [
   { label: 'Home', href: '#' },
@@ -8,60 +9,77 @@ const NAV_LINKS = [
   { label: 'Help', href: '#' },
 ]
 
-export default function Header() {
-  const [menuOpen, setMenuOpen] = useState(false)
+type Props = {
+  campus: string
+  onCampusChange: (campusId: string) => void
+}
+
+export default function Header({ campus, onCampusChange }: Props) {
+  const [cartOpen, setCartOpen] = useState(false)
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <a href="#" className="text-lg font-extrabold tracking-tight">
-          We<span className="text-emerald-600">mart</span>
+    <header className="sticky top-0 z-30 border-b border-border bg-white">
+      <div className="mx-auto flex max-w-5xl items-center gap-2 px-3 py-2 sm:gap-4 sm:px-4 sm:py-3">
+        <a href="#" className="flex shrink-0 items-center">
+          <img
+            src="/wemart-logo.png"
+            alt="Wemart"
+            width={512}
+            height={512}
+            className="h-8 w-8 rounded-lg sm:h-9 sm:w-9"
+          />
         </a>
 
+        {/* Campus selector lives in the sticky header on every screen size */}
+        <CampusPicker value={campus} onChange={onCampusChange} compact />
+
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-5 sm:flex" aria-label="Main">
+        <nav className="ml-auto hidden items-center gap-5 sm:flex" aria-label="Main">
           {NAV_LINKS.map((link) => (
             <a
               key={link.label}
               href={link.href}
-              className="text-sm font-medium text-slate-600 transition hover:text-emerald-600"
+              className="text-sm font-medium text-ink/70 transition hover:text-orange-deep"
             >
               {link.label}
             </a>
           ))}
         </nav>
 
-        {/* Mobile hamburger */}
+        {/* Cart (ops note: no checkout — sample data until the seller tools land) */}
         <button
           type="button"
-          onClick={() => setMenuOpen((open) => !open)}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-menu"
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          className="rounded-lg p-2 text-slate-700 transition hover:bg-slate-100 sm:hidden"
+          onClick={() => setCartOpen((open) => !open)}
+          aria-expanded={cartOpen}
+          aria-controls="cart-panel"
+          aria-label="Cart"
+          className="ml-auto shrink-0 rounded-lg p-2 text-ink transition hover:bg-gray-cart sm:ml-0"
         >
-          {menuOpen ? '✕' : '☰'}
+          <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+            <path
+              d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 8H6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <circle cx="10" cy="20" r="1.6" fill="currentColor" />
+            <circle cx="18" cy="20" r="1.6" fill="currentColor" />
+          </svg>
         </button>
       </div>
 
-      {/* Mobile menu panel */}
-      {menuOpen && (
-        <nav
-          id="mobile-menu"
-          aria-label="Main"
-          className="border-t border-slate-100 bg-white px-4 pb-3 sm:hidden"
+      {cartOpen && (
+        <div
+          id="cart-panel"
+          className="mx-auto max-w-5xl border-t border-border bg-gray-cart px-4 py-3"
         >
-          {NAV_LINKS.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              onClick={() => setMenuOpen(false)}
-              className="block py-2.5 text-sm font-medium text-slate-700 transition hover:text-emerald-600"
-            >
-              {link.label}
-            </a>
-          ))}
-        </nav>
+          <p className="text-sm font-medium text-ink">Your cart is empty.</p>
+          <p className="text-xs text-ink/70">
+            Wemart is in demo mode — sample listings only, no checkout yet.
+          </p>
+        </div>
       )}
     </header>
   )

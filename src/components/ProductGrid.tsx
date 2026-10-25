@@ -10,12 +10,14 @@ type Props = {
 export default function ProductGrid({ products, compact = false }: Props) {
   if (products.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-        <p className="text-2xl">🛒</p>
-        <p className="mt-2 text-sm font-medium text-slate-700">
+      <div className="rounded-lg border border-dashed border-border bg-white px-4 py-10 text-center">
+        <p className="text-2xl" aria-hidden="true">
+          🛒
+        </p>
+        <p className="mt-2 text-sm font-medium text-ink">
           No items match your filters
         </p>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-ink/60">
           Try another campus, category, or search term.
         </p>
       </div>

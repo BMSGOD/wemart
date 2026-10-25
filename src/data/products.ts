@@ -12,6 +12,8 @@ export const PRODUCTS: Product[] = [
     featured: true,
     description: 'i5 8th gen, 8GB RAM, 256GB SSD. Battery in good condition.',
     emoji: '💻',
+    vendor: 'Chidi Tech Hub',
+    verified: true,
   },
   {
     id: 'p2',
@@ -24,6 +26,8 @@ export const PRODUCTS: Product[] = [
     featured: true,
     description: 'Noise cancelling, 6h battery per charge. New in box.',
     emoji: '🎧',
+    vendor: 'Kelechi Gadgets',
+    verified: true,
   },
   {
     id: 'p3',
@@ -35,6 +39,7 @@ export const PRODUCTS: Product[] = [
     availability: 'available',
     description: 'CSC 201 course text. Slight highlighting, no torn pages.',
     emoji: '📗',
+    vendor: 'Adaeze Books',
   },
   {
     id: 'p4',
@@ -46,6 +51,8 @@ export const PRODUCTS: Product[] = [
     availability: 'available',
     description: 'Bundle of 5 years of past questions and solutions.',
     emoji: '📘',
+    vendor: 'Mbazi Study Store',
+    verified: true,
   },
   {
     id: 'p5',
@@ -58,6 +65,8 @@ export const PRODUCTS: Product[] = [
     featured: true,
     description: 'Solid wood desk with drawer. Chair included.',
     emoji: '🪑',
+    vendor: 'Bear Furniture NG',
+    verified: true,
   },
   {
     id: 'p6',
@@ -69,6 +78,7 @@ export const PRODUCTS: Product[] = [
     availability: 'reserved',
     description: 'Firm foam, waterproof cover, barely used.',
     emoji: '🛏️',
+    vendor: 'Sadiq Home Looks',
   },
   {
     id: 'p7',
@@ -80,6 +90,7 @@ export const PRODUCTS: Product[] = [
     availability: 'available',
     description: 'Size M, dark wash, no stains. Thrifted, like new.',
     emoji: '🧥',
+    vendor: 'Yemi Thrift',
   },
   {
     id: 'p8',
@@ -92,6 +103,8 @@ export const PRODUCTS: Product[] = [
     featured: true,
     description: 'US size 9, white. Authentic, worn twice.',
     emoji: '👟',
+    vendor: 'Kicks Campus',
+    verified: true,
   },
   {
     id: 'p9',
@@ -103,6 +116,8 @@ export const PRODUCTS: Product[] = [
     availability: 'available',
     description: 'Jollof with chicken. Vendor delivers on campus.',
     emoji: '🍛',
+    vendor: 'Mama T Kitchen',
+    verified: true,
   },
   {
     id: 'p10',
@@ -114,6 +129,7 @@ export const PRODUCTS: Product[] = [
     availability: 'available',
     description: 'Per-session rate. Calculus, algebra, statistics.',
     emoji: '📐',
+    vendor: 'Nnamdi STEM Tutors',
   },
   {
     id: 'p11',
@@ -125,6 +141,8 @@ export const PRODUCTS: Product[] = [
     availability: 'available',
     description: 'Two coats, materials excluded. Weekend availability.',
     emoji: '🎨',
+    vendor: 'BrightPoint Paints',
+    verified: true,
   },
   {
     id: 'p12',
@@ -136,5 +154,6 @@ export const PRODUCTS: Product[] = [
     availability: 'sold',
     description: '90L capacity, energy efficient, works perfectly.',
     emoji: '❄️',
+    vendor: 'Abdul Gadgets',
   },
 ]

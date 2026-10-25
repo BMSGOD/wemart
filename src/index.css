@@ -1,1 +1,50 @@
+/* Self-hosted brand fonts (bundled by Vite from node_modules — no CDN) */
+@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/bricolage-grotesque";
 @import "tailwindcss";
+
+@theme {
+  /* Wemart brand tokens */
+  --color-orange: #EF5B2D;
+  --color-orange-deep: #C9411A;
+  --color-orange-tint: #FDEBE6;
+  --color-ink: #181311;
+  --color-gray-cart: #ECECEC;
+  --color-surface: #F7F5F3;
+  --color-border: #D9D4CF;
+  --color-green: #1B7F46;
+
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Hard offset shadow taken from the logo's cart: flat, no blur, ink.
+   Defined as a utility so it can be combined with `hover:` / `active:`. */
+@utility hard-shadow {
+  box-shadow: 3px 3px 0 0 var(--color-ink);
+}
+
+/* One focus style for the whole app: visible keyboard focus everywhere */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+  }
+
+  /* Respect users who opt out of motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
