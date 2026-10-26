@@ -3,6 +3,29 @@
 > Generated 2026-10-25 from the actual repository files (AGENTS.md, package.json, src/, database/, wrangler.toml, git state) plus REST verifications run against the live Supabase project with the **anon key only**.
 > This document is the handoff source of truth when it agrees with the code. Where the owner provided database facts that could not be re-verified from the repo, they are marked **[owner-verified]**.
 > **No application code, SQL, commits or deployments were changed to produce this document.**
+>
+> ---
+>
+> ## AUTH-PHASE UPDATE (2026-10-26) — supersedes sections 6–11 below where they disagree
+>
+> Sections 2–10 of this document were written before the auth phase and are stale in parts (e.g. "no auth in code", phase statuses). The live state:
+>
+> **Done — frontend (auth phase, build+lint+vitest green, not yet exercised against live Supabase):**
+> - `src/lib/auth.tsx` — Supabase Auth façade: sign-up (buyer/vendor roles in `user_metadata`), sign-in/out, email verify/resend, password reset/recovery; names the 0008 trigger's metadata contract (`role`, `full_name`, `shop_name`).
+> - `src/lib/router.tsx` — dependency-free pathname router (`/auth/*`, `/verify`, `/reset-password`, `/sell`, `/account`); deep links survive via the wrangler SPA fallback.
+> - `src/pages/AuthPages.tsx` (register/verify/login/reset), `src/pages/HomePage.tsx` (v1 catalog engine moved verbatim; storefront redesign committed on branch `frontend-tweaks` in worktree `Wemart-frontend`), `src/pages/VendorDashboardPage.tsx` (profile edit via `business_name`/`display_name` only, store-locations manager over `vendor_locations` × `campus_directory`, pending-account banner, read-only inventory), `src/pages/AccountPages.tsx` (buyer profile via `display_name`/`whatsapp_number`), `src/components/AuthPrompt.tsx` (built but UNWIRED — confirmed schema exposes no vendor contact field).
+> - `src/data/vendor.ts` — guarded own-row data layer; every write names verified columns only; maps 42501 → "policies-pending" sentinel; `listVendorProducts(vendorId)` scopes inventory reads to the caller's vendor id (reconciled to the preserved public SELECT policies).
+> - Tests: `npm test` (vitest + RTL + jsdom) — 23/23 pass; still NOT live-verified end-to-end.
+>
+> **SQL state:** 0006 executed+verified (V4 browser probe still not owner-confirmed). 0007 executed. 0003 finalized (84 UUID bonds), not yet executed. 0004 reviewed but not run. **0010 pre-execution inspection COMPLETED 2026-10-26** — all facts reconciled into **`database/0008_vendor_buyer_rls_policies.sql`, now execution-ready and HARDENED against privilege escalation** (column-level ACLs: vendor `account_status`/`auth_user_id` and buyer `auth_user_id`/`id` are ungranted to the browser; see its header + AGENTS.md row).
+>
+> **0008 blockers to clear before execution (unknowns that remain, none invented):**
+> 1. products base-table columns beyond `id/vendor_id/listing_status` (name/price/quantity/image…) are still unconfirmed ⇒ product-creation/pricing UI stays blocked; no inventory write columns invented.
+> 2. Vendor contact/location-address fields: no confirmed columns ⇒ AuthPrompt stays unwired.
+> 3. Part 7 partial unique indexes (vendors/buyers `auth_user_id`): needs explicit owner approval; 010 proved no duplicate links exist, so they apply cleanly.
+> 4. results of admin email verification settings (Supabase Auth dashboard Site URL + redirect URLs must be set for verify/reset flows).
+>
+> **Next owner action:** review + approve + run `database/0008_vendor_buyer_rls_policies.sql` in one SQL-Editor session (single transaction, preflight aborts cleanly), then run its read-only verification tail and paste the full JSON; follow the V8/V9 manual checklist ([TEST] vendor/buyer signup → exactly one linked profile row each; anon buyers probe → []; 0006 regression probe; catalog browsing identical). Then re-run 0010 for the after-policies snapshot. Product-creation UI resumes once the products base-table columns are confirmed (0011 column dump).
 
 ---
 
