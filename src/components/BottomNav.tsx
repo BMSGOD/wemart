@@ -1,8 +1,10 @@
 /* Mobile-only bottom navigation. Replaces the old hamburger menu. */
+import { Link } from '../lib/router'
+
 const ITEMS = [
   {
     label: 'Home',
-    href: '#',
+    href: '/',
     icon: (
       <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
         <path
@@ -17,7 +19,7 @@ const ITEMS = [
   },
   {
     label: 'Browse',
-    href: '#',
+    href: '/',
     icon: (
       <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
         <rect x="4" y="4" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -29,7 +31,7 @@ const ITEMS = [
   },
   {
     label: 'Sell',
-    href: '#',
+    href: '/sell',
     icon: (
       <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
         <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
@@ -38,7 +40,7 @@ const ITEMS = [
   },
   {
     label: 'Orders',
-    href: '#',
+    href: '/orders',
     icon: (
       <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
         <path
@@ -54,7 +56,7 @@ const ITEMS = [
   },
   {
     label: 'Me',
-    href: '#',
+    href: '/account',
     icon: (
       <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
         <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -70,18 +72,22 @@ const ITEMS = [
   },
 ]
 
-export default function BottomNav() {
+export default function BottomNav({ path = '/' }: { path?: string }) {
   return (
     <nav
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white sm:hidden"
     >
       <ul className="mx-auto flex max-w-lg">
-        {ITEMS.map((item, index) => {
-          const active = index === 0
+        {ITEMS.map((item) => {
+          /* Home owns the '/' state; 'Browse' ('/') never steals it. */
+          const active =
+            path === '/'
+              ? item.label === 'Home'
+              : path === item.href && item.href !== '/'
           return (
             <li key={item.label} className="flex-1">
-              <a
+              <Link
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 className={`flex flex-col items-center gap-0.5 px-1 pt-2 pb-3 text-[10px] transition ${
@@ -92,7 +98,7 @@ export default function BottomNav() {
               >
                 {item.icon}
                 {item.label}
-              </a>
+              </Link>
             </li>
           )
         })}

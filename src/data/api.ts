@@ -292,11 +292,15 @@ export async function getCatalog(
 
 /**
  * Fallback pool for an empty filtered view: ONE `catalog_search` call
- * with the location filters ONLY (no category, search, condition, price
- * or stock filters), so the RPC's own tier ordering (same campus → same
- * state → everywhere else) supplies the proximity ranking. Every card
- * keeps its true campus/state labels — recommendations are never
- * relabelled, and they are never blended into matching results.
+ * with the location filters ONLY (no category, search, condition or
+ * price filters) plus in-stock-only, so the RPC's own tier ordering
+ * (same campus → same state → everywhere else) supplies the proximity
+ * ranking and `price_asc` orders each proximity group cheapest → most
+ * expensive. With no location preference every available offer is
+ * ordered cheapest → most expensive. Inactive and out-of-stock products
+ * are never returned (p_in_stock_only), and every card keeps its true
+ * campus/state labels — recommendations are never relabelled or blended
+ * into matching results.
  */
 export async function getRecommended(
   query: {
@@ -309,6 +313,8 @@ export async function getRecommended(
     /* Campus beats state — the tier ordering covers the state too */
     campusId: query.campusId,
     stateId: query.campusId ? undefined : query.stateId,
+    inStock: true,
+    sort: 'price-asc',
     limit: query.limit ?? 12,
   })
   return page.items

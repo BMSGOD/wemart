@@ -1,22 +1,51 @@
--- ----------------------------------------------------------------------------
--- Wemart — University tier for the location hierarchy (PHASE 2 DRAFT)
+-- ---------------------------------------------------------------------------
+-- Wemart — University tier via a companion association column (DESIGN B)
 -- database/0003_university_tier_DRAFT.sql
 --
--- DO NOT RUN YET — REVIEW-ONLY migration draft.
--- An automated run is NOT part of any pipeline; nothing in this repo
--- executes SQL against the live project. Everything here waits for
--- explicit approval after the Part 0 inspection output.
+-- DO NOT RUN YET — REVIEW-ONLY migration draft, restructured for the
+-- owner-approved DESIGN B (2026-10-25, "approval to prepare for review,
+-- not to execute"). Nothing in this repo executes SQL; the owner runs
+-- everything by hand after final sign-off.
+--
+-- DESIGN B in one sentence: universities become 'university'-typed
+-- location rows parented to their states, campuses KEEP
+-- parent_location_id = state, and each campus gains a separate nullable
+-- link (locations.university_location_id) to its university — so the
+-- catalog view, campus_directory view, catalog_search and
+-- catalog_near_campus are untouched BY CONSTRUCTION (0f proved both
+-- functions read only those views).
 --
 -- Prerequisite: run PART 0 (inspection queries, read-only) of
 -- database/0002_national_location_directory.sql and review the output:
 -- * 0a — current location_type CHECK constraint. The DO block in
 -- section 1 swaps it for a list including 'university'; if 0a shows
 -- no constraint at all, SKIP section 1 (do not touch anything).
--- * 0b — exact campus_directory + catalog view definitions. Section 4
--- rebuild MUST be reconciled with the LIVE definition before running.
--- * 0c — vendor_locations link column. Section 3 re-parents campuses;
--- vendor links point at campuses by id (they keep working), but
--- confirm no FK or view depends on the one-hop campus->state chain.
+--   [PART 0 COMPLETE 2026-10-25]
+--   * 0a result: constraint 'locations_location_type_check' allows
+--   ('state','city','campus','warehouse','pickup_point','other') —
+--   'university' is NOT allowed. Section 1 must keep ALL SIX existing
+--   values and add 'university' (the earlier draft list wrongly dropped
+--   warehouse/pickup_point/other — corrected below).
+--   * 0b1 result: campus_directory = campus LEFT JOIN state on
+--   campus.parent_location_id + state type (direct one-hop parenting).
+--   * 0b2 result: catalog joins vendor_locations vl → campus
+--   (vl.campus_location_id) → state (campus.parent_location_id). So
+--   section 3 re-parenting WILL re-point catalog's 'state' join at the
+--   university row; catalog must be rebuilt with the COALESCE-through-
+--   university pattern on top of the owner-supplied FULL definition
+--   (the behavioural summary is NOT enough — request the literal SQL).
+--   * 0c result: vendor_locations.campus_location_id → locations(id)
+--   FK (no cascade) + legacy location_id (ON DELETE SET NULL). Campus
+--   ids never change during re-parenting and nothing is deleted →
+--   vendor links stay intact. Confirmed safe for section 3.
+--   * 0d result: SUCCESS — no duplicate (name, location_type) pairs.
+-- NEW INSPECTION REQUIRED BEFORE ANY RUN (see section 5):
+--   0f — pg_get_functiondef for public.catalog_search (plus any helper
+--   functions it calls). catalog_search is now THE product query path;
+--   if it derives campus/state scope from campus.parent_location_id
+--   directly, section 3 re-parenting silently corrupts its state tier.
+--   It may ALSO be safe if it delegates to the catalog view — confirm
+--   from the definition, then reconcile section 4's rebuild coverage.
 
 -- WHAT IT DOES AFTER REVIEW:
 --   1. Allows location_type = 'university' (idempotent constraint swap).
@@ -34,7 +63,12 @@
 
 -- ----------------------------------------------------------------------------
 -- 1. CONSTRAINT — allow 'university' as a location_type (idempotent).
---    Confirm the existing constraint name from the Part 0a output first.
+--    CONFIRMED from Part 0a: the live constraint is literally named
+--    'locations_location_type_check' and currently allows
+--    ('state','city','campus','warehouse','pickup_point','other').
+--    The replacement MUST keep all six existing values (an ADD
+--    CONSTRAINT CHECK validates existing rows — dropping values could
+--    fail the migration outright if any 'warehouse'/'other' row exists).
 -- ----------------------------------------------------------------------------
 -- DO $$
 -- DECLARE
@@ -57,13 +91,23 @@
 --     END LOOP;
 --     EXECUTE 'ALTER TABLE public.locations'
 --       || ' ADD CONSTRAINT locations_location_type_check'
---       || ' CHECK (location_type IN (''state'', ''city'', ''campus'', ''university''))';
+--       || ' CHECK (location_type IN (''state'', ''city'', ''campus'','
+--       || ' ''warehouse'', ''pickup_point'', ''other'', ''university''))';
 --   END IF;
 -- END
 -- $$;
 
 -- ----------------------------------------------------------------------------
 -- 2. UNIVERSITY ROWS — parented to states; NOT EXISTS guard = idempotent.
+--    Counts: 87 university rows across all 37 units (36 states + FCT)
+--    — every unit has at least one (Owner: confirm against NUC policy).
+--    Naming convention: every university name embeds its acronym in
+--    parentheses exactly like the draft's 0002-style campuses do.
+--    Owner declarations from the approval: NAUB, NOUN, TECH-U count as
+--    universities; AFIT below is deliberately retained as the
+--    university-tier GROUPING row for its Kaduna campuses — the AFIT
+--    CAMPUS itself stays parented directly to Kaduna in 0002 (military
+--    institute; flag → REVIEW with owner before execution).
 -- ----------------------------------------------------------------------------
 -- INSERT INTO public.locations (name, location_type, parent_location_id)
 -- SELECT v.uni_name, 'university', s.id
@@ -130,7 +174,7 @@
 --   ('Lagos', 'Lagos State University of Education (LASUED)')
 --   ('Nasarawa', 'Federal University, Lafia (FULafia)')
 --   ('Nasarawa', 'Nasarawa State University (NSUK)')
---   ('Niger', 'Federal University of Technology (FUT)')
+--   ('Niger', 'Federal University of Technology, Minna (FUTMINNA)')
 --   ('Niger', 'Ibrahim Badamasi Babangida University (IBBU)')
 --   ('Ogun', 'Federal University of Agriculture (FUNAAB)')
 --   ('Ogun', 'Olabisi Onabanjo University (OOU)')
@@ -163,628 +207,662 @@
 -- );
 
 -- ----------------------------------------------------------------------------
--- 3. CAMPUS RE-PARENTING — 89 campuses under their university.
---    Each statement only fires while the campus's CURRENT parent is the
---    expected state — anything else is left untouched for review.
+-- 3. DESIGN B — UNIVERSITY ASSOCIATION WITHOUT RE-PARENTING (APPROVED
+--    2026-10-25 for review; still do not execute until final sign-off).
+--    3A adds a nullable link column + FK. 3B links the 89 campuses.
+--    Every statement only fires while the campus's CURRENT parent is the
+--    expected state, and the FK targets a 'university'-typed row found on
+--    that same state — a wrong link self-blocks instead of corrupting.
+--    campuses: parent_location_id is NEVER modified (catalog, both views
+--    and both RPCs are untouched by construction).
+-- ----------------------------------------------------------------------------
+-- 3A. ADD COLUMN + FK (idempotent ADD COLUMN, guarded ADD CONSTRAINT).
+-- ALTER TABLE public.locations
+--   ADD COLUMN IF NOT EXISTS university_location_id uuid;
+-- DO $$
+-- BEGIN
+--   IF NOT EXISTS (
+--     SELECT 1 FROM pg_constraint con
+--     WHERE con.conrelid = 'public.locations'::regclass
+--       AND con.conname = 'locations_university_location_id_fkey'
+--   ) THEN
+--     EXECUTE 'ALTER TABLE public.locations'
+--       || ' ADD CONSTRAINT locations_university_location_id_fkey'
+--       || ' FOREIGN KEY (university_location_id) '
+--       || ' REFERENCES public.locations(id)';
+--   END IF;
+-- END
+-- $$;
+-- Why no ON DELETE action is specified: the FK is bare ON DELETE NO
+-- ACTION — this user session must never delete a location row anyway
+-- (0002/0003 delete nothing), so callers in the app never hit it.
+-- Type enforcement note: the FK alone cannot verify the target is a
+-- 'university' row. In 3B every UPDATE also matches
+-- u.location_type = 'university' on the same state as the campus'; so
+-- a non-university target cannot be linked through this migration.
+-- A verification query (Part 2-V5) makes any residual mismatch visible.
+-- ----------------------------------------------------------------------------
+-- 3B. CAMPUS → UNIVERSITY LINKS — 89 campuses, same guards as before but
+--     targeting the NEW column (uni and campus must share the same state).
 -- ----------------------------------------------------------------------------
 
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Abia State University (ABSU)'
 --   AND s.location_type = 'state' AND s.name = 'Abia'
 --   AND c.location_type = 'campus' AND c.name = 'Abia State University (ABSU), Uturu'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Michael Okpara University of Agriculture (MOUAU)'
 --   AND s.location_type = 'state' AND s.name = 'Abia'
 --   AND c.location_type = 'campus' AND c.name = 'Michael Okpara University of Agriculture (MOUAU), Umudike'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Adamawa State University (ADSU)'
 --   AND s.location_type = 'state' AND s.name = 'Adamawa'
 --   AND c.location_type = 'campus' AND c.name = 'Adamawa State University (ADSU), Mubi'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Modibbo Adama University (MAU)'
 --   AND s.location_type = 'state' AND s.name = 'Adamawa'
 --   AND c.location_type = 'campus' AND c.name = 'Modibbo Adama University (MAU), Yola'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Abubakar Tafawa Balewa University (ATBU)'
 --   AND s.location_type = 'state' AND s.name = 'Bauchi'
 --   AND c.location_type = 'campus' AND c.name = 'Abubakar Tafawa Balewa University (ATBU), Bauchi'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University of Health Sciences, Azare (FUHSA)'
 --   AND s.location_type = 'state' AND s.name = 'Bauchi'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University of Health Sciences, Azare (FUHSA)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Bauchi State University (BASUG)'
 --   AND s.location_type = 'state' AND s.name = 'Bauchi'
 --   AND c.location_type = 'campus' AND c.name = 'Bauchi State University (BASUG), Gadau'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Uyo (UNIUYO)'
 --   AND s.location_type = 'state' AND s.name = 'Akwa Ibom'
 --   AND c.location_type = 'campus' AND c.name = 'University of Uyo (UNIUYO), Uyo'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Akwa Ibom State University (AKSU)'
 --   AND s.location_type = 'state' AND s.name = 'Akwa Ibom'
 --   AND c.location_type = 'campus' AND c.name = 'Akwa Ibom State University (AKSU), Mkpat Enin'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Nnamdi Azikiwe University (UNIZIK)'
 --   AND s.location_type = 'state' AND s.name = 'Anambra'
 --   AND c.location_type = 'campus' AND c.name = 'Nnamdi Azikiwe University (UNIZIK), Awka'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Chukwuemeka Odumegwu Ojukwu University (COOU)'
 --   AND s.location_type = 'state' AND s.name = 'Anambra'
 --   AND c.location_type = 'campus' AND c.name = 'Chukwuemeka Odumegwu Ojukwu University (COOU), Igbariam'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University Otuoke (FUO)'
 --   AND s.location_type = 'state' AND s.name = 'Bayelsa'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University Otuoke (FUO)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Niger Delta University (NDU)'
 --   AND s.location_type = 'state' AND s.name = 'Bayelsa'
 --   AND c.location_type = 'campus' AND c.name = 'Niger Delta University (NDU)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Benue State University (BSU)'
 --   AND s.location_type = 'state' AND s.name = 'Benue'
 --   AND c.location_type = 'campus' AND c.name = 'Benue State University (BSU), Makurdi'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Joseph Sarwuan Tarka University (JOSTUM)'
 --   AND s.location_type = 'state' AND s.name = 'Benue'
 --   AND c.location_type = 'campus' AND c.name = 'Joseph Sarwuan Tarka University (JOSTUM), Makurdi'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University of Health Sciences, Otukpo (FUHSO)'
 --   AND s.location_type = 'state' AND s.name = 'Benue'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University of Health Sciences, Otukpo (FUHSO)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Maiduguri (UNIMAID)'
 --   AND s.location_type = 'state' AND s.name = 'Borno'
 --   AND c.location_type = 'campus' AND c.name = 'University of Maiduguri (UNIMAID), Maiduguri'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Borno State University (BOSU)'
 --   AND s.location_type = 'state' AND s.name = 'Borno'
 --   AND c.location_type = 'campus' AND c.name = 'Borno State University (BOSU), Maiduguri'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Nigerian Army University (NAUB)'
 --   AND s.location_type = 'state' AND s.name = 'Borno'
 --   AND c.location_type = 'campus' AND c.name = 'Nigerian Army University (NAUB), Biu'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Calabar (UNICAL)'
 --   AND s.location_type = 'state' AND s.name = 'Cross River'
 --   AND c.location_type = 'campus' AND c.name = 'University of Calabar (UNICAL), Calabar'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Cross River State (UNICROSS)'
 --   AND s.location_type = 'state' AND s.name = 'Cross River'
 --   AND c.location_type = 'campus' AND c.name = 'University of Cross River State (UNICROSS), Calabar'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University of Petroleum Resources (FUPRE)'
 --   AND s.location_type = 'state' AND s.name = 'Delta'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University of Petroleum Resources (FUPRE), Effurun'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Delta State University (DELSU)'
 --   AND s.location_type = 'state' AND s.name = 'Delta'
 --   AND c.location_type = 'campus' AND c.name = 'Delta State University (DELSU), Abraka'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Delta (UNIDEL)'
 --   AND s.location_type = 'state' AND s.name = 'Delta'
 --   AND c.location_type = 'campus' AND c.name = 'University of Delta (UNIDEL), Agbor'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Dennis Osadebe University (DOU)'
 --   AND s.location_type = 'state' AND s.name = 'Delta'
 --   AND c.location_type = 'campus' AND c.name = 'Dennis Osadebe University (DOU), Asaba'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Alex Ekwueme Federal University, Ndufu-Alike (FUNAI)'
 --   AND s.location_type = 'state' AND s.name = 'Ebonyi'
 --   AND c.location_type = 'campus' AND c.name = 'Alex Ekwueme Federal University, Ndufu-Alike (FUNAI)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Ebonyi State University (EBSU)'
 --   AND s.location_type = 'state' AND s.name = 'Ebonyi'
 --   AND c.location_type = 'campus' AND c.name = 'Ebonyi State University (EBSU), Abakaliki'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Benin (UNIBEN)'
 --   AND s.location_type = 'state' AND s.name = 'Edo'
 --   AND c.location_type = 'campus' AND c.name = 'University of Benin (UNIBEN), Benin City'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Ambrose Alli University (AAU)'
 --   AND s.location_type = 'state' AND s.name = 'Edo'
 --   AND c.location_type = 'campus' AND c.name = 'Ambrose Alli University (AAU), Ekpoma'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Edo State University (EDSU)'
 --   AND s.location_type = 'state' AND s.name = 'Edo'
 --   AND c.location_type = 'campus' AND c.name = 'Edo State University (EDSU), Uzairue'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Ekiti State University (EKSU)'
 --   AND s.location_type = 'state' AND s.name = 'Ekiti'
 --   AND c.location_type = 'campus' AND c.name = 'Ekiti State University (EKSU), Ado-Ekiti'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University Oye-Ekiti (FUOYE)'
 --   AND s.location_type = 'state' AND s.name = 'Ekiti'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University Oye-Ekiti (FUOYE), Oye Ekiti'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Nigeria (UNN)'
 --   AND s.location_type = 'state' AND s.name = 'Enugu'
 --   AND c.location_type = 'campus' AND c.name = 'University of Nigeria (UNN), Nsukka'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Nigeria (UNN)'
 --   AND s.location_type = 'state' AND s.name = 'Enugu'
 --   AND c.location_type = 'campus' AND c.name = 'University of Nigeria (UNN), Enugu Campus'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Enugu State University of Science and Technology (ESUT)'
 --   AND s.location_type = 'state' AND s.name = 'Enugu'
 --   AND c.location_type = 'campus' AND c.name = 'Enugu State University of Science and Technology (ESUT), Agbani'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Abuja (UNIABUJA)'
 --   AND s.location_type = 'state' AND s.name = 'Abuja (FCT)'
 --   AND c.location_type = 'campus' AND c.name = 'University of Abuja (UNIABUJA), Gwagwalada'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'National Open University of Nigeria (NOUN)'
 --   AND s.location_type = 'state' AND s.name = 'Abuja (FCT)'
 --   AND c.location_type = 'campus' AND c.name = 'National Open University of Nigeria (NOUN), Abuja'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Kashere (FUKAShere)'
 --   AND s.location_type = 'state' AND s.name = 'Gombe'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Kashere (FUKAShere)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Gombe State University (GSU)'
 --   AND s.location_type = 'state' AND s.name = 'Gombe'
 --   AND c.location_type = 'campus' AND c.name = 'Gombe State University (GSU), Gombe'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University of Technology (FUTO)'
 --   AND s.location_type = 'state' AND s.name = 'Imo'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University of Technology (FUTO), Owerri'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Imo State University (IMSU)'
 --   AND s.location_type = 'state' AND s.name = 'Imo'
 --   AND c.location_type = 'campus' AND c.name = 'Imo State University (IMSU), Owerri'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Dutse (FUD)'
 --   AND s.location_type = 'state' AND s.name = 'Jigawa'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Dutse (FUD)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Sule Lamido University (SLU)'
 --   AND s.location_type = 'state' AND s.name = 'Jigawa'
 --   AND c.location_type = 'campus' AND c.name = 'Sule Lamido University (SLU), Kafin Hausa'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Bayero University, Kano (BUK)'
 --   AND s.location_type = 'state' AND s.name = 'Kano'
 --   AND c.location_type = 'campus' AND c.name = 'Bayero University, Kano (BUK), Gwarzo Road'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Aliko Dangote University of Science and Technology (ADUST)'
 --   AND s.location_type = 'state' AND s.name = 'Kano'
 --   AND c.location_type = 'campus' AND c.name = 'Aliko Dangote University of Science and Technology (ADUST), Wudil'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Yusuf Maitama Sule University (YUMSU)'
 --   AND s.location_type = 'state' AND s.name = 'Kano'
 --   AND c.location_type = 'campus' AND c.name = 'Yusuf Maitama Sule University (YUMSU), Kano'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Ahmadu Bello University (ABU)'
 --   AND s.location_type = 'state' AND s.name = 'Kaduna'
 --   AND c.location_type = 'campus' AND c.name = 'Ahmadu Bello University (ABU), Zaria'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Air Force Institute of Technology (AFIT)'
 --   AND s.location_type = 'state' AND s.name = 'Kaduna'
 --   AND c.location_type = 'campus' AND c.name = 'Air Force Institute of Technology (AFIT)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Kaduna State University (KASU)'
 --   AND s.location_type = 'state' AND s.name = 'Kaduna'
 --   AND c.location_type = 'campus' AND c.name = 'Kaduna State University (KASU)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Umaru Musa Yar''adua University (UMYU)'
 --   AND s.location_type = 'state' AND s.name = 'Katsina'
 --   AND c.location_type = 'campus' AND c.name = 'Umaru Musa Yar''adua University (UMYU), Katsina'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Dutsin-Ma (FUDMA)'
 --   AND s.location_type = 'state' AND s.name = 'Katsina'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Dutsin-Ma (FUDMA)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Birnin Kebbi (FUBK)'
 --   AND s.location_type = 'state' AND s.name = 'Kebbi'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Birnin Kebbi (FUBK)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Kebbi State University of Science and Technology (KSUSTA)'
 --   AND s.location_type = 'state' AND s.name = 'Kebbi'
 --   AND c.location_type = 'campus' AND c.name = 'Kebbi State University of Science and Technology (KSUSTA), Aliero'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Prince Abubakar Audu University (PAAU)'
 --   AND s.location_type = 'state' AND s.name = 'Kogi'
 --   AND c.location_type = 'campus' AND c.name = 'Prince Abubakar Audu University (PAAU), Anyigba'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Lokoja (FULOKOJA)'
 --   AND s.location_type = 'state' AND s.name = 'Kogi'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Lokoja (FULOKOJA)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Ilorin (UNILORIN)'
 --   AND s.location_type = 'state' AND s.name = 'Kwara'
 --   AND c.location_type = 'campus' AND c.name = 'University of Ilorin (UNILORIN), Ilorin'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Kwara State University (KWASU)'
 --   AND s.location_type = 'state' AND s.name = 'Kwara'
 --   AND c.location_type = 'campus' AND c.name = 'Kwara State University (KWASU), Malete'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Lagos (UNILAG)'
 --   AND s.location_type = 'state' AND s.name = 'Lagos'
 --   AND c.location_type = 'campus' AND c.name = 'University of Lagos (UNILAG), Akoka'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Lagos (UNILAG)'
 --   AND s.location_type = 'state' AND s.name = 'Lagos'
 --   AND c.location_type = 'campus' AND c.name = 'University of Lagos (UNILAG), Idi-Araba (CMUL)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Lagos State University (LASU)'
 --   AND s.location_type = 'state' AND s.name = 'Lagos'
 --   AND c.location_type = 'campus' AND c.name = 'Lagos State University (LASU), Ojo'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Lagos State University of Science and Technology (LASUSTECH)'
 --   AND s.location_type = 'state' AND s.name = 'Lagos'
 --   AND c.location_type = 'campus' AND c.name = 'Lagos State University of Science and Technology (LASUSTECH), Ikorodu'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Lagos State University of Education (LASUED)'
 --   AND s.location_type = 'state' AND s.name = 'Lagos'
 --   AND c.location_type = 'campus' AND c.name = 'Lagos State University of Education (LASUED), Epe'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Lafia (FULafia)'
 --   AND s.location_type = 'state' AND s.name = 'Nasarawa'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Lafia (FULafia)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Nasarawa State University (NSUK)'
 --   AND s.location_type = 'state' AND s.name = 'Nasarawa'
 --   AND c.location_type = 'campus' AND c.name = 'Nasarawa State University (NSUK), Keffi'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
--- WHERE u.location_type = 'university' AND u.name = 'Federal University of Technology (FUT)'
+-- WHERE u.location_type = 'university' AND u.name = 'Federal University of Technology, Minna (FUTMINNA)'
 --   AND s.location_type = 'state' AND s.name = 'Niger'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University of Technology (FUT), Minna'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Ibrahim Badamasi Babangida University (IBBU)'
 --   AND s.location_type = 'state' AND s.name = 'Niger'
 --   AND c.location_type = 'campus' AND c.name = 'Ibrahim Badamasi Babangida University (IBBU), Lapai'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University of Agriculture (FUNAAB)'
 --   AND s.location_type = 'state' AND s.name = 'Ogun'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University of Agriculture (FUNAAB), Alabata'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Olabisi Onabanjo University (OOU)'
 --   AND s.location_type = 'state' AND s.name = 'Ogun'
 --   AND c.location_type = 'campus' AND c.name = 'Olabisi Onabanjo University (OOU), Ago-Iwoye'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Tai Solarin University of Education (TASUED)'
 --   AND s.location_type = 'state' AND s.name = 'Ogun'
 --   AND c.location_type = 'campus' AND c.name = 'Tai Solarin University of Education (TASUED), Ijagun'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University of Technology (FUTA)'
 --   AND s.location_type = 'state' AND s.name = 'Ondo'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University of Technology (FUTA), Akure'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Adekunle Ajasin University (AAUA)'
 --   AND s.location_type = 'state' AND s.name = 'Ondo'
 --   AND c.location_type = 'campus' AND c.name = 'Adekunle Ajasin University (AAUA), Akungba-Akoko'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Medical Sciences (UNIMED)'
 --   AND s.location_type = 'state' AND s.name = 'Ondo'
 --   AND c.location_type = 'campus' AND c.name = 'University of Medical Sciences (UNIMED), Ondo'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Obafemi Awolowo University (OAU)'
 --   AND s.location_type = 'state' AND s.name = 'Osun'
 --   AND c.location_type = 'campus' AND c.name = 'Obafemi Awolowo University (OAU), Ile-Ife'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Osun State University (UNIOSUN)'
 --   AND s.location_type = 'state' AND s.name = 'Osun'
 --   AND c.location_type = 'campus' AND c.name = 'Osun State University (UNIOSUN), Osogbo'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Ibadan (UI)'
 --   AND s.location_type = 'state' AND s.name = 'Oyo'
 --   AND c.location_type = 'campus' AND c.name = 'University of Ibadan (UI), Ibadan'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Ladoke Akintola University of Technology (LAUTECH)'
 --   AND s.location_type = 'state' AND s.name = 'Oyo'
 --   AND c.location_type = 'campus' AND c.name = 'Ladoke Akintola University of Technology (LAUTECH), Ogbomoso'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'First Technical University (TECH-U)'
 --   AND s.location_type = 'state' AND s.name = 'Oyo'
 --   AND c.location_type = 'campus' AND c.name = 'First Technical University (TECH-U), Ibadan'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Jos (UNIJOS)'
 --   AND s.location_type = 'state' AND s.name = 'Plateau'
 --   AND c.location_type = 'campus' AND c.name = 'University of Jos (UNIJOS), Jos'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Plateau State University (PLASU)'
 --   AND s.location_type = 'state' AND s.name = 'Plateau'
 --   AND c.location_type = 'campus' AND c.name = 'Plateau State University (PLASU), Bokkos'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'University of Port Harcourt (UNIPORT)'
 --   AND s.location_type = 'state' AND s.name = 'Rivers'
 --   AND c.location_type = 'campus' AND c.name = 'University of Port Harcourt (UNIPORT), Choba'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Rivers State University (RSU)'
 --   AND s.location_type = 'state' AND s.name = 'Rivers'
 --   AND c.location_type = 'campus' AND c.name = 'Rivers State University (RSU), Port Harcourt'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Usmanu Danfodiyo University (UDUSOK)'
 --   AND s.location_type = 'state' AND s.name = 'Sokoto'
 --   AND c.location_type = 'campus' AND c.name = 'Usmanu Danfodiyo University (UDUSOK), Sokoto'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Sokoto State University (SSU)'
 --   AND s.location_type = 'state' AND s.name = 'Sokoto'
 --   AND c.location_type = 'campus' AND c.name = 'Sokoto State University (SSU), Sokoto'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Taraba State University (TSU)'
 --   AND s.location_type = 'state' AND s.name = 'Taraba'
 --   AND c.location_type = 'campus' AND c.name = 'Taraba State University (TSU), Jalingo'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Wukari (FUWUKARI)'
 --   AND s.location_type = 'state' AND s.name = 'Taraba'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Wukari (FUWUKARI)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Gashua (FUGASHUA)'
 --   AND s.location_type = 'state' AND s.name = 'Yobe'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Gashua (FUGASHUA)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Yobe State University (YSU)'
 --   AND s.location_type = 'state' AND s.name = 'Yobe'
 --   AND c.location_type = 'campus' AND c.name = 'Yobe State University (YSU), Damaturu'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Federal University, Gusau (FUGUS)'
 --   AND s.location_type = 'state' AND s.name = 'Zamfara'
 --   AND c.location_type = 'campus' AND c.name = 'Federal University, Gusau (FUGUS)'
 --   AND c.parent_location_id = s.id;
 --
--- UPDATE public.locations c SET parent_location_id = u.id
+-- UPDATE public.locations c SET university_location_id = u.id
 -- FROM public.locations u, public.locations s
 -- WHERE u.location_type = 'university' AND u.name = 'Zamfara State University (ZAMSU)'
 --   AND s.location_type = 'state' AND s.name = 'Zamfara'
@@ -792,8 +870,13 @@
 --   AND c.parent_location_id = s.id;
 --
 -- ----------------------------------------------------------------------------
--- 4. VIEW REBUILD — campus_directory keeps its contract; resolves the
---    state through EITHER the university tier OR a direct state parent.
+-- 4. VIEW REBUILD — *** NOT NEEDED IN DESIGN B — DO NOT EXECUTE ***
+--    Preserved below ONLY as historical Design A material for future
+--    reference. Design B never changes parent_location_id of any campus,
+--    so campus_directory and catalog keep producing exactly today's rows
+--    (campus_state_id = real state, campus_directory.state_id = real
+--    state) and both RPCs are unaffected. Recreating either view would
+--    only ADD new risk for zero Design B benefit.
 -- ----------------------------------------------------------------------------
 -- CREATE OR REPLACE VIEW public.campus_directory AS
 -- SELECT c.id AS campus_id,
@@ -803,33 +886,198 @@
 -- FROM public.locations c
 -- LEFT JOIN public.locations u
 --   ON u.id = c.parent_location_id AND u.location_type = 'university'
--- JOIN public.locations s
+-- LEFT JOIN public.locations s
 --   ON s.id = COALESCE(u.parent_location_id, c.parent_location_id)
+--   AND s.location_type = 'state'
 -- WHERE c.location_type = 'campus';
+-- NOTE (Part 0b1 reconciliation): the state join must be a LEFT JOIN
+-- WITH the 'state' type filter, so non-state parents (e.g. [TEST] city
+-- rows) yield NULL state columns exactly like the live view instead of
+-- surfacing a city row as the state name.
 
 -- ----------------------------------------------------------------------------
--- 5. BLOCKERS / NOT-FROM-THE-REPO DECISIONS (no invention, per rules)
+-- 5. BLOCKERS / NOT-FROM-THE-REPO DECISIONS (updated after Part 0 + 0f)
 -- ----------------------------------------------------------------------------
---   * catalog view (Part 0b): its definition is NOT exposed via the REST
---     API, so this repo cannot confirm whether catalog picks
---     campus_state_name from the campus's DIRECT parent. If it does,
---     the section 3 re-parenting will empty campus_state_name for the
---     re-parented campuses. The SAME COALESCE pattern must then be
---     applied inside catalog (or its source view) via CREATE OR REPLACE
---     using the LIVE definition as base — authored after 0b output.
---   * vendor link column confirmed from the 0c output before section 3.
---   * AFIT stays a direct-child campus (military institute; REVIEW it
--- against the NUC university list). NAUB and NOUN are universities.
---   * This draft remains review-only until 0a/0b/0c outputs exist.
+--   * CONFIRMED BLOCKER — catalog view (0b2): it resolves the state via
+--     `LEFT JOIN locations st ON st.id = campus.parent_location_id`,
+--     where campus = `vl.campus_location_id`. Once section 3 re-parents
+--     a campus to its university, this join fetches the UNIVERSITY row
+--     as the "state" — every offer on a re-parented campus would carry
+--     the university name in campus_state_name and state-tier filters
+--     would match universities instead of states. FIX: CREATE OR REPLACE
+--     VIEW public.catalog ... using the LIVE definition as the base with
+--     the same two-step resolution pattern as section 4
+--     (campus → university → state, COALESCE fallback to a direct
+--     state parent). The owner's Part 0 run produced a behavioural
+--     summary only; the LITERAL definition is required to author this
+--     safely — ask the owner to re-run
+--       SELECT pg_get_viewdef('public.catalog'::regclass, true);
+--     and return the full SQL text. Do not hand-write the view.
+--   * RESOLVED INSPECTION (0f) — catalog_search function, 2026-10-25:
+--     LITERAL definition obtained (owner-run pg_get_functiondef; the
+--     exact-signature lookup failed because of argument ordering, the
+--     pg_proc listing fallback worked — keep that as the canonical way).
+--     FINDINGS:
+--     * catalog_search is `LANGUAGE sql STABLE SET search_path ''`,
+--       `RETURNS SETOF catalog`, and reads ONLY `public.catalog` +
+--       `public.campus_directory`. It does NOT read parent_location_id
+--       or the locations table directly anywhere.
+--     * Its location params are used ONLY in ORDER BY tiering:
+--         tier 0 = p_campus_id match on c.campus_id, OR
+--                  (campus-reviewers: p_campus_id IS NULL AND
+--                   p_state_id matches c.campus_state_id) → 0
+--         tier 1 = same state via
+--               (SELECT d.state_id FROM campus_directory d
+--                WHERE d.campus_id = p_campus_id) → 1
+--         tier 2 = everything else.
+--       No location filter exists in the WHERE clause — p_campus_id /
+--       p_state_id NEVER exclude rows; they only rank. (Verified against
+--       src/data/api.ts: both params are passed straight through; the
+--       App's "In other places" grouping depends on that show-all
+--       behaviour. Do not "improve" the function into filtering.)
+--     * campus_near_campus (unused by the frontend but live) has the
+--       same dependency shape: catalog + campus_directory only.
+--     CONSEQUENCE: both functions keep working unchanged iff the two
+--     VIEWS keep their contracts (campus_state_id = real state;
+--     campus_directory.state_id = real state). No DROP/CREATE of the
+--     functions is needed, so their signatures stay untouched — but
+--     `RETURNS SETOF catalog` pins the view's column list: names, order
+--     and types must never change. An ADD COLUMN on locations is safe
+--     (existing views do not retroactively gain columns); a CREATE OR
+--     REPLACE of catalog must reproduce the view EXACTLY.
+--   * *** DESIGN DECISION (owner input requested) — two ways to add the
+--     university tier: ***
+--     DESIGN A — true re-parent (sections 3+4 as written, plus a full
+--       catalog-view rebuild). Pro: canonical parent chain. Con: needs
+--       the LITERAL catalog view SQL to author the rebuild safely, and
+--       any mistake there corrupts product cards + state tiers site --
+--       wide. Higher blast radius.
+--     DESIGN B — RECOMMENDED: keep every campus parented to its state
+--       (parent_location_id unchanged); introduce universities ONLY as
+--       location rows of type 'university' (section 2, unchanged) and
+--       link each campus with a NEW nullable column:
+--         ALTER TABLE public.locations
+--           ADD COLUMN IF NOT EXISTS university_location_id uuid
+--           REFERENCES public.locations(id);
+--       (idempotent; add after section 1's CHECK swap accepts
+--       'university'). Section 3's statements then become UPDATE ... SET
+--       university_location_id = u.id (no parent change), and section 4's
+--       campus_directory rebuild plus the catalog rebuild become
+--       UNNECESSARY — campus_state_id and campus_directory.state_id keep
+--       their exact values. Both RPCs, every consumer of the views, the
+--       89 re-targeted guards and vendor_locations.campus_location_id
+--       stay untouched: zero blast radius on product discovery. Any
+--       future university grouping can be derived from the new column.
+--     Recommendation: DESIGN B — it satisfies every preservation rule
+--     (RPC names/signatures/filtering/ranking; existing products,
+--     vendors, inventory, campus relationships) without touching either
+--     view. DESIGN A remains available only when the full catalog
+--     viewdef is supplied AND its rebuild is reviewed line by line.
+--   * RESOLVED — vendor links (0c): vendor_locations.campus_location_id
+--     FK targets locations(id) with no cascade; campus ids are preserved
+--     by section 3 (re-parenting, not recreating) and nothing is deleted
+--     (ON DELETE SET NULL never fires). No vendor-relationship edits are
+--     needed anywhere in this migration.
+--   * campus_directory contract (0b1): preserved by section 4 (LEFT JOIN
+--     + 'state' type filter, so city-parented [TEST] rows degrade to
+--     NULL state columns exactly like the live view).
+--   * AFIT note (Design B resolves the old ambiguity): a
+--     'university'-typed row named 'Air Force Institute of Technology
+--     (AFIT)' exists in section 2 purely as the grouping label for its
+--     Kaduna campus; AFIT the CAMPUS stays parented directly to Kaduna
+--     with an academic note that it is a military institute, not a NUC
+--     university — REVIEW the pairing against the owner's NUC policy
+--     before running. NAUB (Army) and NOUN (open) are included as
+--     universities per owner declaration.
+--   * STATUS AFTER APPROVAL (2026-10-25): Design B selected and the file
+--     is restructured around it. Still review-only — nothing here runs
+--     until the owner executes it by hand after final sign-off.
+--     Blocking reviews that MUST pass before owner execution:
+--     * Owner confirms the live campus directory names match this
+--       file's expectations (the ~110-campus directory [owner-verified]
+--       provenance is still unknown — if its campus names differ from
+--       the 89 guards here, those UPDATEs will silently no-op and Part
+--       2-V4 will report them for reconciliation);
+--     * Owner confirms the 87 university VALUE rows (section 2) against
+--       their NUC-based policy, especially AFIT (kept as a grouping row)
+--       and every other inline noted pair in section 2.
+--   * The catalog view literal definition is NO LONGER BLOCKING for
+--     Design B (nothing touches the views). It is only needed if Design
+--     A is ever revived.
 
 -- ----------------------------------------------------------------------------
--- VERIFICATION after a reviewed run (read-only)
+-- VERIFICATION after a reviewed run (read-only; run in the SQL editor).
+-- Labels V1..V9. Copy ALL output back for the reconciliation review.
 -- ----------------------------------------------------------------------------
---   SELECT count(*) FROM public.locations WHERE location_type = 'university';
--- -- SELECT count(*) FROM campus_directory;  -- must equal campus row count
---   SELECT s.name AS state, u.name AS university, c.name AS campus
+-- V1 — CHECK constraint now accepts 'university' (expect the 7-value list)
+--   SELECT conname, pg_get_constraintdef(oid) AS definition
+--   FROM pg_constraint
+--   WHERE conrelid = 'public.locations'::regclass AND contype = 'c';
+--
+-- V2 — new column + FK exist (expect: column row + 1 constraint row)
+--   SELECT column_name, data_type FROM information_schema.columns
+--   WHERE table_schema='public' AND table_name='locations'
+--     AND column_name='university_location_id';
+--   SELECT conname, pg_get_constraintdef(oid) AS definition
+--   FROM pg_constraint
+--   WHERE conrelid = 'public.locations'::regclass
+--     AND conname = 'locations_university_location_id_fkey';
+--
+-- V3 — university rows per state (expect 87 rows across 36 states + FCT)
+--   SELECT s.name AS state, count(*) AS universities
+--   FROM public.locations u
+--   JOIN public.locations s ON s.id = u.parent_location_id
+--        AND s.location_type = 'state'
+--   WHERE u.location_type = 'university'
+--   GROUP BY 1 ORDER BY 1;
+--
+-- V4 — linked vs unlinked campuses (unlinked = intentional or name
+--      mismatch; expect [TEST] rows + any 0003 name misses + AFIT handling)
+--   SELECT
+--     count(*) FILTER (WHERE c.university_location_id IS NULL) AS unlinked,
+--     count(*) FILTER (WHERE c.university_location_id IS NOT NULL) AS linked,
+--     count(*) AS campuses
+--   FROM public.locations c WHERE c.location_type = 'campus';
+--   SELECT c.name AS unlinked_campus, s.name AS state
 --   FROM public.locations c
---   LEFT JOIN public.locations u ON u.id = c.parent_location_id
---   JOIN public.locations s
--- ON s.id = COALESCE(u.parent_location_id, c.parent_location_id)
---   WHERE c.location_type = 'campus' ORDER BY s.name;
+--   LEFT JOIN public.locations s ON s.id = c.parent_location_id
+--   WHERE c.location_type='campus' AND c.university_location_id IS NULL
+--   ORDER BY 1;
+--
+-- V5 — FK targets are university-typed (expect 0 rows; anything else is
+--      a mass-linking leak that must be reverted and investigated)
+--   SELECT c.name AS campus, l.name AS wrong_target, l.location_type
+--   FROM public.locations c
+--   JOIN public.locations l ON l.id = c.university_location_id
+--   WHERE c.location_type = 'campus' AND l.location_type <> 'university';
+--
+-- V6 — university's state must equal the campus' state (expect 0 rows)
+--   SELECT c.name AS campus, cs.name AS campus_state, us.name AS uni_state
+--   FROM public.locations c
+--   JOIN public.locations u ON u.id = c.university_location_id
+--   JOIN public.locations cs ON cs.id = c.parent_location_id
+--   JOIN public.locations us ON us.id = u.parent_location_id
+--   WHERE c.location_type='campus' AND cs.id <> us.id;
+--
+-- V7 — no campus was re-parented (expect: every campus's parent is
+--      state-typed; NULL rows are [TEST]-only and pre-existing)
+--   SELECT c.name, l.location_type AS parent_type
+--   FROM public.locations c
+--   LEFT JOIN public.locations l ON l.id = c.parent_location_id
+--   WHERE c.location_type = 'campus'
+--     AND (l.location_type IS NULL OR l.location_type <> 'state');
+--
+-- V8 — views unchanged in row terms
+--   SELECT count(*) AS campus_directory_rows FROM public.campus_directory;
+--   SELECT pg_get_viewdef('public.campus_directory'::regclass, true);
+--   SELECT pg_get_viewdef('public.catalog'::regclass, true);
+--   -- definitions must be BYTE-IDENTICAL to the Part 0 output from 0b1/0b2
+--
+-- V9 — duplicate check again, now including university rows (expect none)
+--   SELECT name, location_type, count(*) FROM public.locations
+--   GROUP BY 1, 2 HAVING count(*) > 1;
+--
+-- V10 — frontend smoke (browser or REST, anon key only):
+--   load the site unfiltered → catalog still returns the same offers;
+--   pick the same state/campus as before the run → sections and counts
+--   identical (ranking untouched); campus dropdown unchanged.

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import LocationSelects, { type LocationSelection } from './LocationSelects'
+import { Link } from '../lib/router'
 import type { CampusDirectoryEntry } from '../types'
 
 const NAV_LINKS = [
-  { label: 'Home', href: '#' },
-  /* Placeholder links for upcoming pages; pointing nowhere harmful yet. */
-  { label: 'Sell an item', href: '#' },
-  { label: 'My orders', href: '#' },
+  { label: 'Home', href: '/' },
+  /* v2 routes: auth + dashboards (wrangler SPA fallback keeps deep links alive). */
+  { label: 'Sell an item', href: '/sell' },
+  { label: 'My orders', href: '/orders' },
   { label: 'Help', href: '#' },
 ]
 
@@ -28,7 +29,7 @@ export default function Header({
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-white">
       <div className="mx-auto flex max-w-5xl items-center gap-2 px-3 py-2 sm:gap-4 sm:px-4 sm:py-3">
-        <a href="#" className="flex shrink-0 items-center">
+        <Link href="/" className="flex shrink-0 items-center">
           <img
             src="/wemart-logo.png"
             alt="Wemart"
@@ -36,7 +37,7 @@ export default function Header({
             height={512}
             className="h-8 w-8 rounded-lg sm:h-9 sm:w-9"
           />
-        </a>
+        </Link>
 
         {/* Location selector (State + Campus) lives in the sticky header
             on every screen size */}
@@ -51,13 +52,13 @@ export default function Header({
         {/* Desktop nav */}
         <nav className="ml-auto hidden items-center gap-5 sm:flex" aria-label="Main">
           {NAV_LINKS.map((link) => (
-            <a
+            <Link
               key={link.label}
               href={link.href}
               className="text-sm font-medium text-ink/70 transition hover:text-orange-deep"
             >
               {link.label}
-            </a>
+            </Link>
           ))}
         </nav>
 

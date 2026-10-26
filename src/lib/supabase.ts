@@ -5,10 +5,16 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
  *
  * PUBLISHABLE (anon) key only: it is public by design and protected by RLS.
  * NEVER put a service_role key or any other secret here or in a VITE_ env
- * var — everything in the frontend bundle is world-readable. BROWSER ACCESS
- * IS READ-ONLY: only the `catalog` view plus the locations/categories
- * directories (see src/data/api.ts); never vendors, vendor_locations,
- * buyers, orders or payments.
+ * var — everything in the frontend bundle is world-readable. Browsing
+ * access (src/data/api.ts) is read-only against the `catalog` view plus
+ * the locations/categories directories.
+ *
+ * AUTH-PHASE EXCEPTION (v2): src/lib/auth.tsx talks to Supabase Auth
+ * unconditionally, and src/data/vendor.ts reads/writes ONLY the signed-in
+ * vendor's own rows (`vendors`, `products`) or the signed-in buyer's own
+ * `buyers` row — every such query is scoped by the 0008 RLS policies and
+ * surfaces a "policies pending" state while they are unapproved.
+ * `vendor_locations`, `orders` and `payments` remain never-read.
  *
  * Config (real values live in `.env.local`, which is gitignored; template
  * in `.env.example`):
