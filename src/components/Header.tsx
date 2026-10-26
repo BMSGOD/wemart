@@ -147,14 +147,18 @@ export default function Header({
               alt=""
               width={512}
               height={512}
-              className="h-8 w-8 rounded-full sm:h-9 sm:w-9"
+              className="h-8 w-8 rounded-full sm:h-9 sm:w-9 lg:h-10 lg:w-10"
               loading="eager"
             />
-            <span className="text-lg font-bold tracking-tight text-ink">Wemart</span>
+            <span className="text-lg font-bold tracking-tight text-ink lg:text-[22px]">Wemart</span>
           </Link>
 
-          {/* Desktop search pill */}
-          <div className="hidden flex-1 lg:flex">{searchForm(false)}</div>
+          {/* Desktop search pill — capped width; the header's remaining
+              space intentionally sits to its right, before the account
+              cluster (lg:ml-10 keeps the wordmark→search gap at 40px) */}
+          <div className="hidden flex-1 lg:ml-10 lg:flex">
+            <div className="w-full max-w-[520px]">{searchForm(false)}</div>
+          </div>
 
           {/* Account menu (auth-aware) — 36px round icon button */}
           <div ref={accountRef} className="relative hidden lg:block">
