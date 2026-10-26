@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Header from '../components/Header'
 import BottomNav from '../components/BottomNav'
 import { type LocationSelection } from '../components/LocationSelects'
-import SearchBox from '../components/SearchBox'
-import CategoryButtons from '../components/CategoryButtons'
+import CategoryMenu from '../components/CategoryMenu'
+import Footer from '../components/Footer'
+import { HeroSection, CategoryTilesRow } from '../components/HomePromos'
+import ProductCard from '../components/ProductCard'
 import FilterSheet from '../components/FilterSheet'
 import ProductGrid from '../components/ProductGrid'
 import SetupNotice from '../components/SetupNotice'
@@ -559,6 +561,13 @@ export default function HomePage() {
      blended into) matching results, with no click required.
      ------------------------------------------------------------------- */
   const nothingFound = !listingLoading && completed.state === 'ok' && completed.items.length === 0
+  /* Home view: no search text, no category, no chips — the storefront hero
+     and promos show ONLY here; anything active renders a results page. */
+  const isHomeView =
+    search.trim() === '' &&
+    filters.categoryId === 'all' &&
+    filters.subCategoryId === 'all' &&
+    activeChips.length === 0
   const suggestWhenEmpty = boot.state === 'ok' && nothingFound
   const [suggestions, setSuggestions] = useState<Product[] | null>(null)
   useEffect(() => {
@@ -713,148 +722,153 @@ export default function HomePage() {
   return (
     <div className="min-h-dvh bg-surface">
       <Header
-        directory={directory}
-        location={filters}
-        onStateChange={handleStateChange}
-        onCampusChange={handleCampusChange}
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        activeFilterCount={activeChips.length}
+        onOpenFilters={() => setFilterSheetOpen(true)}
+        categories={categories}
+        categoryTop={filters.categoryId}
+        categorySub={filters.subCategoryId}
+        onCategoryTop={(categoryId) => {
+          setFilters((prev) => ({
+            ...prev,
+            categoryId,
+            subCategoryId: 'all',
+          }))
+        }}
+        onCategorySub={(subCategoryId) => {
+          setFilters((prev) => ({ ...prev, subCategoryId }))
+        }}
       />
 
-      <main className="mx-auto max-w-5xl space-y-5 px-4 py-4">
-        {/* Hero: headline + search + filters entry, compact enough to fit
-            above the fold on a phone (no decorative elements) */}
-        <section className="relative overflow-hidden rounded-lg border border-border bg-white p-4 sm:p-6">
-          <div className="relative">
-            <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-4xl">
-              Discover on Wemart.
-            </h1>
-            <p className="mt-1 max-w-md text-sm text-ink/70 sm:mt-2 sm:text-base">
-              Phones, books, furniture and more from student vendors across
-              Nigerian campuses. Safe meetups, fair prices.
-            </p>
+      {/* Category bar (desktop; phones use the header drawer) */}
+      <CategoryMenu
+        topCategories={categories.filter(
+          (category) => category.parentCategoryId === null,
+        )}
+        categories={categories}
+        top={filters.categoryId}
+        sub={filters.subCategoryId}
+        onTop={(categoryId) => {
+          setFilters((prev) => ({
+            ...prev,
+            categoryId,
+            subCategoryId: 'all',
+          }))
+        }}
+        onSub={(subCategoryId) => {
+          setFilters((prev) => ({ ...prev, subCategoryId }))
+        }}
+      />
 
-            <div className="mt-3 max-w-sm">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <SearchBox value={searchInput} onChange={setSearchInput} />
-                </div>
-                {/* Filters entry — badge shows the number of active filters */}
-                <button
-                  type="button"
-                  onClick={() => setFilterSheetOpen(true)}
-                  aria-expanded={filterSheetOpen}
-                  aria-haspopup="dialog"
-                  className="hard-shadow relative flex shrink-0 items-center gap-2 rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-bold text-ink transition hover:bg-orange-tint"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-4 w-4"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M4 7h10M18 7h2M14 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM4 17h2M10 17h10M8 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <span className="hidden sm:inline">Filters</span>
-                  {activeChips.length > 0 && (
-                    <span
-                      className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange px-1 text-[10px] font-bold text-ink"
-                      aria-hidden="true"
-                    >
-                      {activeChips.length}
-                    </span>
-                  )}
-                  {activeChips.length > 0 && (
-                    <span className="sr-only">
-                      ({activeChips.length} filters active)
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              {/* Removable chips for every active filter + Clear all */}
-              {activeChips.length > 0 && (
-                <div
-                  className="mt-2 flex flex-wrap items-center gap-2"
-                  aria-label="Active filters"
-                >
-                  {activeChips.map((chip) => (
-                    <span
-                      key={chip.key}
-                      className="flex items-center gap-1 rounded-full bg-orange-tint py-1 pr-1 pl-3 text-xs font-medium text-ink"
-                    >
-                      {chip.label}
-                      <button
-                        type="button"
-                        onClick={chip.remove}
-                        aria-label={`Remove filter: ${chip.label}`}
-                        className="rounded-full p-1 text-ink/60 transition hover:bg-orange hover:text-ink"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="h-3 w-3"
-                          aria-hidden="true"
-                        >
-                          <path
-                            d="M6 6l12 12M18 6L6 18"
-                            stroke="currentColor"
-                            strokeWidth="2.4"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </button>
-                    </span>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={clearAllFilters}
-                    className="text-xs font-semibold text-orange-deep underline transition hover:text-ink"
-                  >
-                    Clear all
-                  </button>
-                </div>
+      <main className="mx-auto max-w-6xl space-y-5 px-3 py-4 sm:px-4">
+        {/* Storefront hero + category tiles: home view only. Any active
+            search/filter/category turns this into a results page. */}
+        {isHomeView && (
+          <>
+            <HeroSection />
+            <CategoryTilesRow
+              topCategories={categories.filter(
+                (category) => category.parentCategoryId === null,
               )}
+              onTop={(categoryId) => {
+                setFilters((prev) => ({
+                  ...prev,
+                  categoryId,
+                  subCategoryId: 'all',
+                }))
+              }}
+            />
+          </>
+        )}
 
-              <a
-                href="#"
-                className="hard-shadow mt-3 inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-orange-deep hover:text-white active:translate-x-0.5 active:translate-y-0.5 active:shadow-none motion-reduce:active:translate-x-0 motion-reduce:active:translate-y-0"
+        {/* Location chip — the chosen place is set in Filters, shown here
+            under the search bar, removable with one click. */}
+        {(chosenCampus || filters.stateId !== 'all') && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1 rounded-full border border-border bg-orange-tint py-1 pr-1 pl-3 text-xs font-bold text-ink">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5 text-orange-deep"
+                aria-hidden="true"
               >
-                Sell an item
-                <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                <path
+                  d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Zm0-8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="max-w-64 truncate">
+                {chosenCampus
+                  ? `${chosenCampus.name}, ${chosenStateName}`
+                  : chosenStateName}
+              </span>
+              <button
+                type="button"
+                onClick={
+                  chosenCampus ? () => handleCampusChange('all') : () => handleStateChange('all')
+                }
+                aria-label={
+                  chosenCampus
+                    ? `Remove location: ${chosenCampus.name}`
+                    : `Remove location: ${chosenStateName}`
+                }
+                className="rounded-full p-1 text-ink/60 transition hover:bg-orange hover:text-ink"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-3 w-3"
+                  aria-hidden="true"
+                >
                   <path
-                    d="M12 5v14M5 12h14"
+                    d="M6 6l12 12M18 6L6 18"
                     stroke="currentColor"
-                    strokeWidth="2.5"
+                    strokeWidth="2.4"
                     strokeLinecap="round"
                   />
                 </svg>
-              </a>
-            </div>
+              </button>
+            </span>
           </div>
-        </section>
+        )}
 
-        <CategoryButtons
-          topCategories={categories.filter(
-            (category) => category.parentCategoryId === null,
-          )}
-          subCategories={chosenTopCategory ? chosenSubCategories : []}
-          top={filters.categoryId}
-          sub={filters.subCategoryId}
-          topName={chosenTopCategory?.name ?? ''}
-          onTop={(categoryId) => {
-            setFilters((prev) => ({
-              ...prev,
-              categoryId,
-              subCategoryId: 'all',
-            }))
-          }}
-          onSub={(subCategoryId) => {
-            setFilters((prev) => ({ ...prev, subCategoryId }))
-          }}
-        />
+        {/* Removable chips for every active filter + Clear all */}
+        {activeChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2" aria-label="Active filters">
+            {activeChips.map((chip) => (
+              <span
+                key={chip.key}
+                className="flex items-center gap-1 rounded-full bg-orange-tint py-1 pr-1 pl-3 text-xs font-medium text-ink"
+              >
+                {chip.label}
+                <button
+                  type="button"
+                  onClick={chip.remove}
+                  aria-label={`Remove filter: ${chip.label}`}
+                  className="rounded-full p-1 text-ink/60 transition hover:bg-orange hover:text-ink"
+                >
+                  <svg viewBox="0 0 24 24" className="h-3 w-3" aria-hidden="true">
+                    <path
+                      d="M6 6l12 12M18 6L6 18"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="text-xs font-semibold text-orange-deep underline transition hover:text-ink"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
 
         {/* Startup failure — the whole marketplace is down, so full width */}
         {boot.state === 'error' && (
@@ -917,28 +931,47 @@ export default function HomePage() {
               </section>
             )}
 
-            {/* New arrivals — the 4 latest items on the platform. Hidden
+            {/* New arrivals — the latest items, home view only, on a bold
+                Ink band with horizontally scrolling white cards. Hidden
                 while the current view is EMPTY so unrelated latest items
                 never appear above the empty-results message; its picks
                 would duplicate the recommendations below. */}
-            {!nothingFound &&
+            {isHomeView &&
+              !nothingFound &&
               !listingLoading &&
               completed.state === 'ok' &&
               newArrivals.length > 0 && (
-              <section aria-labelledby="arrivals-heading">
-                <h2
-                  id="arrivals-heading"
-                  className="mb-2 text-sm font-bold text-ink sm:text-base"
-                >
-                  New arrivals
-                </h2>
-                <ProductGrid products={newArrivals} compact />
+              <section
+                aria-labelledby="arrivals-heading"
+                className="-mx-1 rounded-lg bg-ink px-2 py-3 sm:px-3"
+              >
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <h2
+                    id="arrivals-heading"
+                    className="text-sm font-bold text-white sm:text-base"
+                  >
+                    New arrivals
+                  </h2>
+                  <a
+                    href="#catalog"
+                    className="text-xs font-bold text-orange transition hover:text-white"
+                  >
+                    See all
+                  </a>
+                </div>
+                <ul className="flex gap-3 overflow-x-auto px-1 pb-1">
+                  {newArrivals.map((product) => (
+                    <li key={product.id} className="w-40 shrink-0 sm:w-44">
+                      <ProductCard product={product} />
+                    </li>
+                  ))}
+                </ul>
               </section>
             )}
 
             {/* All items with filters applied, grouped matching-first */}
             {!listingLoading && completed.state === 'ok' && (
-              <section aria-labelledby="catalog-heading">
+              <section id="catalog" aria-labelledby="catalog-heading">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2
                     id="catalog-heading"
@@ -1048,10 +1081,7 @@ export default function HomePage() {
         </p>
       </main>
 
-      <footer className="mx-auto max-w-5xl px-4 pb-6 text-center text-xs text-ink/40">
-        <p>Wemart — browsing only; no checkout or payments yet.</p>
-        <p className="mt-1">Meet sellers safely in public places.</p>
-      </footer>
+      <Footer />
 
       {/* Spacer keeps the footer clear of the fixed mobile nav */}
       <div className="h-16 sm:hidden" aria-hidden="true" />

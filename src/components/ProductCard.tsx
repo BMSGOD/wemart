@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Availability, Condition, Product } from '../types'
+import { Icon, categoryIcon } from './icons'
 
 /* Naira prices render as-is from the DB — never divided */
 const formatter = new Intl.NumberFormat('en-NG', {
@@ -61,9 +62,11 @@ export default function ProductCard({ product }: { product: Product }) {
             }}
           />
         ) : (
-          <span aria-hidden="true" className="text-4xl">
-            {product.emoji}
-          </span>
+          <Icon
+            name={categoryIcon(product.category)}
+            className="h-10 w-10 text-orange-deep/70"
+            strokeWidth={1.5}
+          />
         )}
       </div>
 
@@ -85,20 +88,23 @@ export default function ProductCard({ product }: { product: Product }) {
           {product.vendor}
         </p>
 
-        {/* Campus + state, e.g. "ABU, Kaduna" (no city tier in the model).
+        {/* Campus + state location pill, e.g. "ABU, Kaduna" (no city tier).
             Offers with no campus link (data gap on some rows) show what is
             known — never a fabricated location. */}
         {(product.campusName || product.campusStateName) && (
-          <p className="truncate text-[11px] text-ink/60">
-            {product.campusName && product.campusStateName
-              ? `${product.campusName}, ${product.campusStateName}`
-              : (product.campusName ?? product.campusStateName)}
+          <p className="flex max-w-full items-center gap-1 self-start truncate rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-medium text-ink/80">
+            <Icon name="pin" className="h-3 w-3 shrink-0 text-orange-deep" />
+            <span className="truncate">
+              {product.campusName && product.campusStateName
+                ? `${product.campusName}, ${product.campusStateName}`
+                : (product.campusName ?? product.campusStateName)}
+            </span>
           </p>
         )}
 
-        {/* Condition + availability markers */}
+        {/* Condition badge + availability marker */}
         <div className="mt-auto flex items-center justify-between gap-1 pt-1 text-[11px]">
-          <span className="font-medium text-ink/60">
+          <span className="rounded-full bg-gray-cart px-2 py-0.5 text-[10px] font-bold text-ink/80">
             {CONDITION_LABEL[product.condition]}
           </span>
           <span
