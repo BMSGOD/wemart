@@ -112,6 +112,9 @@ function rowToProduct(row: CatalogRow): Product {
     campus: row.campus_id ?? row.vendor_location_id,
     condition: normalizeCondition(row.product_condition),
     availability: quantity > 0 ? 'available' : 'sold',
+    // exposes the confirmed available_quantity number for the card's
+    // stock labels ("n in stock" / "Only n left"; undefined → plain label)
+    availableQuantity: quantity,
     description: row.description ?? '',
     emoji: '📦',
     imageUrl: getPublicImageUrl(row.image_path ?? null),

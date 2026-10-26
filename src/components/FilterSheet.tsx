@@ -144,7 +144,7 @@ export default function FilterSheet({
             type="button"
             onClick={onClose}
             aria-label="Close filters"
-            className="rounded-lg p-2 text-ink/60 transition hover:bg-orange-tint hover:text-ink"
+            className="rounded-lg p-2 text-ink/60 transition-colors duration-150 hover:bg-hover hover:text-ink"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
               <path
@@ -340,14 +340,14 @@ export default function FilterSheet({
           <button
             type="button"
             onClick={() => onApply(draft)}
-            className="hard-shadow flex-1 rounded-lg bg-orange px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-orange-deep hover:text-white active:translate-x-0.5 active:translate-y-0.5 active:shadow-none motion-reduce:active:translate-x-0 motion-reduce:active:translate-y-0"
+            className="flex-1 rounded-full bg-orange px-4 py-2.5 text-sm font-bold text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white"
           >
             Apply
           </button>
           <button
             type="button"
             onClick={() => onApply({ ...DEFAULT_FILTERS })}
-            className="flex-1 rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-orange-tint"
+            className="flex-1 rounded-full border border-ink bg-white px-4 py-2.5 text-sm font-bold text-ink transition-colors duration-150 hover:bg-hover"
           >
             Reset
           </button>

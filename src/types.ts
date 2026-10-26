@@ -82,6 +82,9 @@ export type Product = {
   campus: string
   condition: Condition
   availability: Availability
+  /** Stock count from the catalog's available_quantity — powers the honest
+   *  stock labels ("n in stock" / "Only n left"); undefined when unknown */
+  availableQuantity?: number
   featured?: boolean
   description: string
   emoji: string /* CSS placeholder shown when no storage image exists */

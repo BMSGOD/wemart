@@ -6,24 +6,38 @@
 @import "tailwindcss";
 
 @theme {
-  /* Wemart brand tokens */
-  --color-orange: #EF5B2D;
-  --color-orange-deep: #C9411A;
-  --color-orange-tint: #FDEBE6;
-  --color-ink: #181311;
-  --color-gray-cart: #ECECEC;
-  --color-surface: #F7F5F3;
-  --color-border: #D9D4CF;
-  --color-green: #1B7F46;
+  /* Wemart brand tokens — warm, calm, Etsy-inspired palette.
+     Orange is for actions and small accents only, never a large surface. */
+  --color-cream: #FAF7F2;      /* page background */
+  --color-hover: #EFEBE6;      /* hover-grey fills */
+  --color-border: #E4DED6;     /* all 1px card/button borders */
+  --color-ink: #221E1C;        /* nearly all text */
+  --color-taupe: #6B645E;      /* secondary text */
+  --color-orange: #EF5B2D;     /* actions + small accents only */
+  --color-orange-deep: #C9411A; /* links, "Only n left", bold text on cream */
+
+  /* Six soft tones — background + matching dark text/icon colour.
+     Product placeholders pick deterministically from these. */
+  --color-sky: #D6E4F5;
+  --color-navy: #1D2F6F;
+  --color-sage: #DCE8DA;
+  --color-forest: #2F5D3A;
+  --color-sand: #F1E4D3;
+  --color-brown: #6B4A2B;
+  --color-blush: #F9DED3;      /* dark pair: orange-deep */
+  --color-butter: #F6EBC6;     /* dark pair: brown */
+  --color-lilac: #E6DEF2;
+  --color-plum: #4B3A7A;
+
+  --color-green: #1B7F46;      /* in-stock labels */
+  /* white #FFFFFF (cards, inputs, panels) and teal-free defaults stay stock */
 
   /* One stack for everything; headings are simply bold */
   --font-sans: "Helvetica Neue", Helvetica, Arimo, Arial, sans-serif;
-}
 
-/* Hard offset shadow taken from the logo's cart: flat, no blur, ink.
-   Defined as a utility so it can be combined with `hover:` / `active:`. */
-@utility hard-shadow {
-  box-shadow: 3px 3px 0 0 var(--color-ink);
+  /* The ONE shadow in the system: very light, soft, ink-tinted.
+     Used only on hover, never as a resting state. */
+  --shadow-soft: 0 2px 8px 0 rgb(34 30 28 / 0.08);
 }
 
 /* One focus style for the whole app: visible keyboard focus everywhere */
@@ -34,11 +48,11 @@
   }
 
   body {
-    background-color: var(--color-surface);
+    background-color: var(--color-cream);
     color: var(--color-ink);
   }
 
-  /* Respect users who opt out of motion */
+  /* Respect users who opt out of motion (transitions are ≤150ms by default) */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

@@ -23,9 +23,9 @@ import { Link, useRouter } from '../lib/router'
 const inputClass =
   'w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink/40 focus-visible:outline-[3px]'
 const primaryButtonClass =
-  'w-full rounded-lg bg-orange px-4 py-2.5 text-sm font-bold text-ink hard-shadow transition hover:bg-orange-deep hover:text-white active:translate-x-[3px] active:translate-y-[3px] active:shadow-none'
+  'w-full rounded-full bg-orange px-4 py-2.5 text-sm font-bold text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white'
 const errorBoxClass =
-  'rounded-lg border border-border bg-surface px-3 py-2 text-sm text-orange-deep'
+  'rounded-lg border border-border bg-hover px-3 py-2 text-sm text-orange-deep'
 
 function AuthShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -101,7 +101,7 @@ export function RegisterPage() {
             onClick={() => setRole(r)}
             className={`rounded-lg border px-3 py-2 text-sm font-bold capitalize transition ${
               role === r
-                ? 'border-ink bg-orange text-ink hard-shadow'
+                ? 'border-ink bg-orange text-ink'
                 : 'border-border bg-white text-ink/70 hover:border-ink'
             }`}
           >

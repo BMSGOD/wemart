@@ -5,10 +5,24 @@ type Props = {
   products: Product[]
   /** Smaller two-column layout for featured rows */
   compact?: boolean
+  /** 'grid' (default) or 'list' — results pages toggle between the two;
+   *  list is the calmer, Etsy-style default for search/category results */
+  layout?: 'grid' | 'list'
 }
 
-/** Just a responsive card grid — empty/notice states live in App.tsx. */
-export default function ProductGrid({ products, compact = false }: Props) {
+/** Card grid or compact list rows — empty/notice states live in HomePage. */
+export default function ProductGrid({ products, compact = false, layout = 'grid' }: Props) {
+  if (layout === 'list') {
+    return (
+      <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {products.map((p) => (
+          <li key={p.id}>
+            <ProductCard product={p} layout="list" />
+          </li>
+        ))}
+      </ul>
+    )
+  }
   return (
     <ul
       className={

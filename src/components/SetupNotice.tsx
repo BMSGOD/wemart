@@ -5,8 +5,8 @@
  */
 export default function SetupNotice() {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-surface px-4">
-      <section className="hard-shadow w-full max-w-sm rounded-lg border border-border bg-white p-6 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-cream px-4">
+      <section className="w-full max-w-sm rounded-lg border border-border bg-white p-6 text-center shadow-soft">
         <img
           src="/wemart-logo.png"
           alt="Wemart"

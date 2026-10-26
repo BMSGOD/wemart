@@ -50,7 +50,7 @@ export default function AuthPrompt({
         aria-modal="true"
         aria-labelledby="auth-prompt-title"
         data-testid="auth-prompt"
-        className="w-full max-w-sm rounded-lg border border-border bg-white p-5 hard-shadow"
+        className="w-full max-w-sm rounded-lg border border-border bg-white p-5 shadow-soft"
         onClick={(event) => event.stopPropagation()}
       >
         <h2
@@ -68,7 +68,7 @@ export default function AuthPrompt({
           <a
             href="/auth/login"
             data-testid="auth-prompt-sign-in"
-            className="rounded-lg bg-orange px-4 py-2.5 text-center text-sm font-bold text-ink hard-shadow transition hover:bg-orange-deep hover:text-white active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
+            className="rounded-full bg-orange px-4 py-2.5 text-center text-sm font-bold text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white"
           >
             Sign in
           </a>

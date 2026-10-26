@@ -4,7 +4,7 @@ import BottomNav from '../components/BottomNav'
 import { type LocationSelection } from '../components/LocationSelects'
 import CategoryMenu from '../components/CategoryMenu'
 import Footer from '../components/Footer'
-import { HeroSection, CategoryTilesRow } from '../components/HomePromos'
+import { HeroSection } from '../components/HomePromos'
 import ProductCard from '../components/ProductCard'
 import FilterSheet from '../components/FilterSheet'
 import ProductGrid from '../components/ProductGrid'
@@ -155,6 +155,8 @@ export default function HomePage() {
   )
   const [search, setSearch] = useState(searchInput)
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  /* Results layout: search/category results default to the compact list */
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
 
   /* Last completed page-1 fetch. Nothing is set synchronously in effects:
      "loading" is derived by comparing the current query key against the
@@ -720,7 +722,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-dvh bg-surface">
+    <div className="min-h-dvh bg-cream">
       <Header
         search={searchInput}
         onSearchChange={setSearchInput}
@@ -762,31 +764,15 @@ export default function HomePage() {
       />
 
       <main className="mx-auto max-w-6xl space-y-5 px-3 py-4 sm:px-4">
-        {/* Storefront hero + category tiles: home view only. Any active
-            search/filter/category turns this into a results page. */}
-        {isHomeView && (
-          <>
-            <HeroSection />
-            <CategoryTilesRow
-              topCategories={categories.filter(
-                (category) => category.parentCategoryId === null,
-              )}
-              onTop={(categoryId) => {
-                setFilters((prev) => ({
-                  ...prev,
-                  categoryId,
-                  subCategoryId: 'all',
-                }))
-              }}
-            />
-          </>
-        )}
+        {/* Storefront hero: home view only. Any active search/filter/category
+            turns this into a results page. */}
+        {isHomeView && <HeroSection />}
 
         {/* Location chip — the chosen place is set in Filters, shown here
             under the search bar, removable with one click. */}
         {(chosenCampus || filters.stateId !== 'all') && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1 rounded-full border border-border bg-orange-tint py-1 pr-1 pl-3 text-xs font-bold text-ink">
+            <span className="flex items-center gap-1 rounded-full border border-border bg-white py-1 pr-1 pl-3 text-xs font-bold text-ink">
               <svg
                 viewBox="0 0 24 24"
                 className="h-3.5 w-3.5 text-orange-deep"
@@ -815,7 +801,7 @@ export default function HomePage() {
                     ? `Remove location: ${chosenCampus.name}`
                     : `Remove location: ${chosenStateName}`
                 }
-                className="rounded-full p-1 text-ink/60 transition hover:bg-orange hover:text-ink"
+                className="rounded-full p-1 text-taupe transition-colors duration-150 hover:bg-hover hover:text-ink"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -840,14 +826,14 @@ export default function HomePage() {
             {activeChips.map((chip) => (
               <span
                 key={chip.key}
-                className="flex items-center gap-1 rounded-full bg-orange-tint py-1 pr-1 pl-3 text-xs font-medium text-ink"
+                className="flex items-center gap-1 rounded-full border border-border bg-white py-1 pr-1 pl-3 text-xs font-medium text-ink"
               >
                 {chip.label}
                 <button
                   type="button"
                   onClick={chip.remove}
                   aria-label={`Remove filter: ${chip.label}`}
-                  className="rounded-full p-1 text-ink/60 transition hover:bg-orange hover:text-ink"
+                  className="rounded-full p-1 text-taupe transition-colors duration-150 hover:bg-hover hover:text-ink"
                 >
                   <svg viewBox="0 0 24 24" className="h-3 w-3" aria-hidden="true">
                     <path
@@ -885,7 +871,7 @@ export default function HomePage() {
                 setBoot({ state: 'loading' })
                 setBootToken((token) => token + 1)
               }}
-              className="hard-shadow mt-3 rounded-lg bg-orange px-4 py-2 text-sm font-bold text-ink transition hover:bg-orange-deep hover:text-white active:translate-x-0.5 active:translate-y-0.5 active:shadow-none motion-reduce:active:translate-y-0 motion-reduce:active:translate-y-0"
+              className="mt-3 rounded-full bg-orange px-5 py-2 text-sm font-bold text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white"
             >
               Try again
             </button>
@@ -904,7 +890,7 @@ export default function HomePage() {
                   {Array.from({ length: 4 }, (_, index) => (
                     <li
                       key={index}
-                      className="h-64 animate-pulse rounded-lg border border-border bg-orange-tint/40"
+                      className="h-64 animate-pulse rounded-lg border border-border bg-hover"
                       aria-hidden="true"
                     />
                   ))}
@@ -924,42 +910,39 @@ export default function HomePage() {
                 <button
                   type="button"
                   onClick={() => setListingToken((token) => token + 1)}
-                  className="hard-shadow mt-3 rounded-lg bg-orange px-4 py-2 text-sm font-bold text-ink transition hover:bg-orange-deep hover:text-white active:translate-x-0.5 active:translate-y-0.5 active:shadow-none motion-reduce:active:translate-y-0 motion-reduce:active:translate-y-0"
+                  className="mt-3 rounded-full bg-orange px-5 py-2 text-sm font-bold text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white"
                 >
                   Retry
                 </button>
               </section>
             )}
 
-            {/* New arrivals — the latest items, home view only, on a bold
-                Ink band with horizontally scrolling white cards. Hidden
-                while the current view is EMPTY so unrelated latest items
-                never appear above the empty-results message; its picks
+            {/* New arrivals — the latest items, home view only. Plain cream
+                background, white cards in a horizontal scroll, bold See all.
+                Hidden while the current view is EMPTY so unrelated latest
+                items never appear above the empty-results message; its picks
                 would duplicate the recommendations below. */}
             {isHomeView &&
               !nothingFound &&
               !listingLoading &&
               completed.state === 'ok' &&
               newArrivals.length > 0 && (
-              <section
-                aria-labelledby="arrivals-heading"
-                className="-mx-1 rounded-lg bg-ink px-2 py-3 sm:px-3"
-              >
-                <div className="mb-2 flex items-center justify-between px-1">
+              <section aria-labelledby="arrivals-heading">
+                <div className="mb-2 flex items-center justify-between">
                   <h2
                     id="arrivals-heading"
-                    className="text-sm font-bold text-white sm:text-base"
+                    className="text-sm font-bold text-ink sm:text-base"
                   >
                     New arrivals
                   </h2>
                   <a
                     href="#catalog"
-                    className="text-xs font-bold text-orange transition hover:text-white"
+                    className="text-xs font-bold text-orange-deep hover:text-ink"
                   >
                     See all
                   </a>
                 </div>
-                <ul className="flex gap-3 overflow-x-auto px-1 pb-1">
+                <ul className="flex gap-3 overflow-x-auto pb-1">
                   {newArrivals.map((product) => (
                     <li key={product.id} className="w-40 shrink-0 sm:w-44">
                       <ProductCard product={product} />
@@ -981,13 +964,50 @@ export default function HomePage() {
                   </h2>
                   {/* The RPC returns no exact total: "N+" while more pages
                       may exist, exact count once the last page is loaded */}
-                  {completed.items.length > 0 && (
-                    <p className="text-xs text-ink/60" aria-live="polite">
-                      {completed.items.length}
-                      {completed.hasMore ? '+' : ''}{' '}
-                      {completed.items.length === 1 ? 'item' : 'items'} found
-                    </p>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {/* List/Grid toggle — results views (category/search)
+                        default to the compact list; home keeps the grid */}
+                    {!isHomeView && completed.items.length > 0 && (
+                      <div
+                        role="group"
+                        aria-label="Result layout"
+                        data-testid="layout-toggle"
+                        className="flex items-center gap-1"
+                      >
+                        <button
+                          type="button"
+                          aria-pressed={viewMode === 'list'}
+                          onClick={() => setViewMode('list')}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold text-ink transition-colors duration-150 ${
+                            viewMode === 'list'
+                              ? 'bg-hover ring-1 ring-inset ring-ink'
+                              : 'hover:bg-hover'
+                          }`}
+                        >
+                          List
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={viewMode === 'grid'}
+                          onClick={() => setViewMode('grid')}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold text-ink transition-colors duration-150 ${
+                            viewMode === 'grid'
+                              ? 'bg-hover ring-1 ring-inset ring-ink'
+                              : 'hover:bg-hover'
+                          }`}
+                        >
+                          Grid
+                        </button>
+                      </div>
+                    )}
+                    {completed.items.length > 0 && (
+                      <p className="text-xs text-taupe" aria-live="polite">
+                        {completed.items.length}
+                        {completed.hasMore ? '+' : ''}{' '}
+                        {completed.items.length === 1 ? 'item' : 'items'} found
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Matching group empty but other scopes have rows → notice
@@ -1015,7 +1035,7 @@ export default function HomePage() {
                           {group.heading}
                         </h3>
                       )}
-                      <ProductGrid products={group.products} />
+                      <ProductGrid products={group.products} layout={viewMode} />
                     </div>
                   ))}
 
@@ -1065,7 +1085,7 @@ export default function HomePage() {
                       type="button"
                       onClick={handleLoadMore}
                       disabled={loadingMore}
-                      className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-bold text-ink transition hover:bg-orange-tint disabled:opacity-50"
+                      className="rounded-full border border-border bg-white px-5 py-2 text-sm font-bold text-ink transition-colors duration-150 hover:bg-hover disabled:opacity-50"
                     >
                       {loadingMore ? 'Loading…' : 'Load more'}
                     </button>

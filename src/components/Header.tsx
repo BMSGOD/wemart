@@ -6,19 +6,15 @@ import { CategoryDrawer } from './CategoryMenu'
 import { Icon } from './icons'
 
 /**
- * The storefront header (v2, Jiji-style):
- * - thin Ink top strip: "Sell on Wemart" left, Help right
- * - main white bar: logo + wordmark, wide search bar with a Filters button
- *   INSIDE its right edge + prominent orange Search button, then Account
- *   menu (auth-aware), Help, Cart, and an always-visible orange SELL button
- * - phones: compact bar (logo, search toggle, SELL, cart, hamburger) with a
- *   drawer holding the accordion category menu and account links
- *
- * Location selects are GONE from the header — they live only in the
- * Filters panel now (FilterSheet). The cart is still the empty-state panel.
- *
- * Props come from HomePage: search state, the filters entry, and the
- * category selection handlers (same filter logic as before).
+ * The quiet, warm storefront header (Etsy-inspired, token-only):
+ * - cream bar with a 1px border underneath (no top strip, no dark areas)
+ * - white pill search input with a 1px ink border; the Filters control sits
+ *   INSIDE the pill; an orange circular search button closes its right end
+ * - auth-aware Account menu, cart, and an always-visible orange SELL pill
+ * - phones: compact bar (logo, search toggle, SELL, cart, hamburger) with
+ *   the accordion-category drawer
+ * - icon buttons are 36px circles; hover = sky background, navy icon
+ * Location selects live ONLY in the Filters panel (FilterSheet).
  */
 
 type Props = {
@@ -33,8 +29,9 @@ type Props = {
   onCategorySub: (subCategoryId: string) => void
 }
 
-const inputBase =
-  'h-10 w-full rounded-lg bg-surface pr-11 pl-3 text-sm text-ink placeholder:text-ink/40 border border-border focus-visible:outline-[3px] focus-visible:outline-ink focus-visible:outline-offset-0'
+/* Shared quiet-icon-button: 36px round, soft sky hover with navy glyph */
+const iconButton =
+  'flex h-9 w-9 items-center justify-center rounded-full text-ink transition-colors duration-150 hover:bg-sky hover:text-navy motion-reduce:transition-none'
 
 export default function Header({
   search,
@@ -72,7 +69,7 @@ export default function Header({
 
   function submitSearch(event: FormEvent) {
     event.preventDefault()
-    /* The debounce in HomePage owns the query; submit just refocuses out. */
+    /* The debounce in HomePage owns the query; submit just blurs out. */
     ;(event.currentTarget as HTMLFormElement).querySelector('input')?.blur()
   }
 
@@ -80,10 +77,9 @@ export default function Header({
     <button
       type="button"
       onClick={onOpenFilters}
-      aria-expanded="false"
       aria-haspopup="dialog"
       data-testid="header-filters"
-      className="relative flex h-10 items-center gap-1.5 rounded-r-lg bg-white px-3 text-xs font-bold text-ink transition hover:bg-orange-tint"
+      className="relative flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-ink transition-colors duration-150 hover:bg-hover"
     >
       <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" aria-hidden="true">
         <path
@@ -97,7 +93,7 @@ export default function Header({
       <span className="hidden lg:inline">Filters</span>
       {activeFilterCount > 0 && (
         <span
-          className="absolute -top-1.5 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange px-0.5 text-[9px] font-bold text-ink"
+          className="absolute -top-1 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange px-0.5 text-[9px] font-bold text-ink"
           aria-hidden="true"
         >
           {activeFilterCount}
@@ -113,75 +109,60 @@ export default function Header({
       onSubmit={submitSearch}
       className={`flex w-full items-stretch ${compact ? 'px-4 pb-2' : ''}`}
     >
-      <div className="flex flex-1 items-stretch rounded-lg border border-border bg-white pr-0 transition focus-within:border-ink">
+      {/* White pill with a 1px ink border; Filters lives inside its right end;
+          the orange circular search button is the pill's right cap */}
+      <div className="flex flex-1 items-center rounded-full border border-ink bg-white pl-3 pr-1 transition-colors duration-150 focus-within:border-orange">
         <input
           type="search"
           aria-label="Search items"
           placeholder="Search phones, books, desks…"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          className={compact ? 'rounded-l-lg border-0 ' + inputBase : inputBase}
+          className="h-9 min-w-0 flex-1 rounded-full bg-transparent text-sm text-ink placeholder:text-taupe focus-visible:outline-none"
         />
-        {/* Filters lives INSIDE the search bar's right edge */}
         {filtersButton}
         <button
           type="submit"
           aria-label="Search"
           data-testid="header-search-submit"
-          className="flex h-10 items-center gap-1.5 rounded-lg bg-orange px-3.5 text-sm font-bold text-ink hard-shadow transition hover:bg-orange-deep hover:text-white active:translate-x-0.5 active:translate-y-0.5 active:shadow-none motion-reduce:active:translate-x-0 motion-reduce:active:translate-y-0 lg:rounded-l-none"
+          className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white lg:ml-2"
         >
           <Icon name="search" className="h-4 w-4" strokeWidth={2.4} />
-          {!compact && <span className="pl-0.5 pr-1">Search</span>}
         </button>
       </div>
     </form>
   )
 
   return (
-    <header className="sticky top-0 z-40 shadow-sm">
-      {/* Thin top strip */}
-      <div className="bg-ink text-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-1.5 text-[11px] font-medium sm:px-4">
-          <Link href="/sell" className="flex items-center gap-1 font-bold text-orange hover:text-white">
-            <Icon name="sell" className="h-3 w-3" />
-            Sell on Wemart
-          </Link>
-          <Link href="#" onClick={(event) => event.preventDefault()} className="flex items-center gap-1 text-white/80 hover:text-white">
-            <Icon name="help" className="h-3 w-3" />
-            Help
-          </Link>
-        </div>
-      </div>
-
-      {/* Main bar */}
-      <div className="border-b border-border bg-white">
-        <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5">
+    <header className="sticky top-0 z-40 bg-cream">
+      <div className="border-b border-border bg-cream">
+        <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-2.5 sm:px-4">
           <Link href="/" className="flex shrink-0 items-center gap-1.5" aria-label="Wemart home">
             <img
               src="/wemart-logo.png"
               alt=""
               width={512}
               height={512}
-              className="h-8 w-8 rounded-lg sm:h-9 sm:w-9"
+              className="h-8 w-8 rounded-full sm:h-9 sm:w-9"
               loading="eager"
             />
             <span className="text-lg font-bold tracking-tight text-ink">Wemart</span>
           </Link>
 
-          {/* Desktop search */}
+          {/* Desktop search pill */}
           <div className="hidden flex-1 lg:flex">{searchForm(false)}</div>
 
-          {/* Always-visible SELL (compact on phones) */}
+          {/* Always-visible SELL pill */}
           <Link
             href="/sell"
             data-testid="header-sell"
-            className="ml-auto flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-orange px-3 text-sm font-bold text-ink hard-shadow transition hover:bg-orange-deep hover:text-white active:translate-x-0.5 active:translate-y-0.5 active:shadow-none motion-reduce:active:translate-x-0 motion-reduce:active:translate-y-0 sm:px-4 lg:ml-0"
+            className="ml-auto flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-orange px-3.5 text-sm font-bold text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white sm:px-4 lg:ml-0"
           >
             <Icon name="plus" className="h-4 w-4" strokeWidth={2.4} />
             <span>SELL</span>
           </Link>
 
-          {/* Account menu (auth-aware) */}
+          {/* Account menu (auth-aware) — 36px round icon button */}
           <div ref={accountRef} className="relative hidden lg:block">
             <button
               type="button"
@@ -189,33 +170,33 @@ export default function Header({
               aria-expanded={accountOpen}
               aria-haspopup="menu"
               data-testid="header-account"
-              className="flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm font-bold text-ink transition hover:bg-orange-tint"
+              className="flex h-9 items-center gap-1.5 rounded-full px-2 text-ink transition-colors duration-150 hover:bg-sky hover:text-navy"
             >
-              <Icon name="user" className="h-5 w-5" />
-              <span className="max-w-24 truncate">
+              <Icon name="user" className="h-5 w-5 shrink-0" />
+              <span className="max-w-24 truncate text-sm font-semibold">
                 {user ? (user.fullName ?? 'Account') : 'Account'}
               </span>
-              <Icon name="chevron" className="h-3 w-3" />
+              <Icon name="chevron" className="h-3 w-3 shrink-0" />
             </button>
             {accountOpen && (
               <div
                 role="menu"
                 aria-label="Account"
                 data-testid="account-menu"
-                className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-white p-1.5 hard-shadow"
+                className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-white p-1.5 shadow-soft"
               >
                 {user ? (
                   <>
-                    <Link role="menuitem" href="/account" className="rounded-md px-3 py-2 text-sm font-medium text-ink hover:bg-orange-tint hover:text-orange-deep" onClick={() => setAccountOpen(false)}>
+                    <Link role="menuitem" href="/account" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
                       My account
                     </Link>
-                    <Link role="menuitem" href="/sell" className="rounded-md px-3 py-2 text-sm font-medium text-ink hover:bg-orange-tint hover:text-orange-deep" onClick={() => setAccountOpen(false)}>
+                    <Link role="menuitem" href="/sell" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
                       Vendor dashboard
                     </Link>
                     <button
                       type="button"
                       role="menuitem"
-                      className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-ink hover:bg-orange-tint hover:text-orange-deep"
+                      className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover"
                       onClick={() => {
                         setAccountOpen(false)
                         signOut().catch(() => {
@@ -228,10 +209,10 @@ export default function Header({
                   </>
                 ) : (
                   <>
-                    <Link role="menuitem" href="/auth/login" className="rounded-md px-3 py-2 text-sm font-medium text-ink hover:bg-orange-tint hover:text-orange-deep" onClick={() => setAccountOpen(false)}>
+                    <Link role="menuitem" href="/auth/login" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
                       Sign in
                     </Link>
-                    <Link role="menuitem" href="/auth/register" className="rounded-md px-3 py-2 text-sm font-medium text-ink hover:bg-orange-tint hover:text-orange-deep" onClick={() => setAccountOpen(false)}>
+                    <Link role="menuitem" href="/auth/register" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
                       Create account
                     </Link>
                   </>
@@ -240,21 +221,20 @@ export default function Header({
             )}
           </div>
 
-          <Link href="#" onClick={(event) => event.preventDefault()} aria-label="Help" className="hidden h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm font-bold text-ink transition hover:bg-orange-tint lg:flex">
+          <Link href="#" onClick={(event) => event.preventDefault()} aria-label="Help" className={`${iconButton} hidden lg:flex`}>
             <Icon name="help" className="h-5 w-5" />
-            Help
           </Link>
 
-          {/* Cart */}
+          {/* Cart — 36px round icon button */}
           <button
             type="button"
             onClick={() => setCartOpen((open) => !open)}
             aria-expanded={cartOpen}
             aria-controls="cart-panel"
             aria-label="Cart"
-            className="relative flex h-10 shrink-0 items-center rounded-lg p-2 text-ink transition hover:bg-gray-cart"
+            className={iconButton}
           >
-            <Icon name="cart" className="h-6 w-6" strokeWidth={1.9} />
+            <Icon name="cart" className="h-5 w-5" strokeWidth={1.9} />
           </button>
 
           {/* Mobile search toggle */}
@@ -263,7 +243,7 @@ export default function Header({
             onClick={() => setMobileSearchOpen((open) => !open)}
             aria-expanded={mobileSearchOpen}
             aria-label="Search"
-            className="flex h-10 items-center rounded-lg p-2 text-ink transition hover:bg-orange-tint lg:hidden"
+            className={`${iconButton} lg:hidden`}
           >
             <Icon name="search" className="h-5 w-5" strokeWidth={2.2} />
           </button>
@@ -276,22 +256,22 @@ export default function Header({
             aria-controls="category-drawer"
             aria-label="Browse categories"
             data-testid="header-menu"
-            className="flex h-10 items-center rounded-lg p-2 text-ink transition hover:bg-orange-tint lg:hidden"
+            className={`${iconButton} lg:hidden`}
           >
             <Icon name="menu" className="h-5 w-5" strokeWidth={2.2} />
           </button>
         </div>
 
-        {/* Mobile search row */}
+        {/* Mobile search pill */}
         {mobileSearchOpen && <div className="lg:hidden">{searchForm(true)}</div>}
 
         {cartOpen && (
           <div
             id="cart-panel"
-            className="mx-auto max-w-6xl border-t border-border bg-gray-cart px-4 py-3"
+            className="mx-auto max-w-6xl border-t border-border px-4 py-3"
           >
             <p className="text-sm font-bold text-ink">Your cart is empty.</p>
-            <p className="text-xs text-ink/70">
+            <p className="text-xs text-taupe">
               No checkout yet — reach out to sellers and meet in person safely.
             </p>
           </div>
@@ -301,7 +281,7 @@ export default function Header({
       {/* Mobile category drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" data-testid="category-drawer">
-          <div className="absolute inset-0 bg-ink/40" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+          <div className="absolute inset-0 bg-ink/30" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
           <div
             role="dialog"
             aria-modal="true"
@@ -314,7 +294,7 @@ export default function Header({
                 type="button"
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Close menu"
-                className="rounded-lg p-2 text-ink hover:bg-orange-tint"
+                className={iconButton}
               >
                 <Icon name="close" className="h-5 w-5" />
               </button>
@@ -328,19 +308,19 @@ export default function Header({
               onSub={onCategorySub}
               onNavigate={() => setDrawerOpen(false)}
             />
-            <div className="mt-auto flex flex-col divide-y divide-border border-t border-border text-sm font-bold text-ink">
+            <div className="mt-auto flex flex-col divide-y divide-border border-t border-border text-sm font-semibold text-ink">
               {user ? (
                 <>
-                  <Link href="/account" className="px-4 py-3">My account</Link>
-                  <Link href="/sell" className="px-4 py-3">Vendor dashboard</Link>
+                  <Link href="/account" className="px-4 py-3 transition-colors duration-150 hover:bg-hover">My account</Link>
+                  <Link href="/sell" className="px-4 py-3 transition-colors duration-150 hover:bg-hover">Vendor dashboard</Link>
                 </>
               ) : (
                 <>
-                  <Link href="/auth/login" className="px-4 py-3">Sign in</Link>
-                  <Link href="/auth/register" className="px-4 py-3">Create account</Link>
+                  <Link href="/auth/login" className="px-4 py-3 transition-colors duration-150 hover:bg-hover">Sign in</Link>
+                  <Link href="/auth/register" className="px-4 py-3 transition-colors duration-150 hover:bg-hover">Create account</Link>
                 </>
               )}
-              <Link href="#" onClick={(event) => event.preventDefault()} className="px-4 py-3">Help</Link>
+              <Link href="#" onClick={(event) => event.preventDefault()} className="px-4 py-3 transition-colors duration-150 hover:bg-hover">Help</Link>
             </div>
           </div>
         </div>

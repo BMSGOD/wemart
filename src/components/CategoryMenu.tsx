@@ -50,7 +50,7 @@ export default function CategoryMenu(props: Handlers) {
   return (
     <div
       ref={barRef}
-      className="hidden border-b border-border bg-white lg:block"
+      className="hidden border-b border-border bg-cream lg:block"
       onMouseLeave={() => setOpenIndex(null)}
     >
       <nav
@@ -68,10 +68,8 @@ export default function CategoryMenu(props: Handlers) {
                 type="button"
                 aria-expanded={open}
                 aria-haspopup="true"
-                className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-xs font-bold transition sm:text-sm ${
-                  props.top === category.id
-                    ? 'bg-orange-tint text-orange-deep'
-                    : 'text-ink hover:bg-orange-tint hover:text-orange-deep'
+                className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-xs font-semibold text-ink transition-colors duration-150 hover:bg-hover motion-reduce:transition-none sm:text-sm ${
+                  props.top === category.id || open ? 'bg-hover' : ''
                 }`}
                 onMouseEnter={() => setOpenIndex(children.length > 0 ? index : null)}
                 onFocus={() => setOpenIndex(children.length > 0 ? index : null)}
@@ -90,7 +88,7 @@ export default function CategoryMenu(props: Handlers) {
 
               {open && children.length > 0 && (
                 <div
-                  className="absolute left-0 top-full z-40 mt-1 w-max min-w-72 max-w-lg rounded-lg border border-border bg-white p-3 hard-shadow"
+                  className="absolute left-0 top-full z-40 mt-1 w-max min-w-72 max-w-lg rounded-lg border border-border bg-white p-3 shadow-soft"
                   role="menu"
                   aria-label={`${category.name} sub-categories`}
                 >
@@ -105,8 +103,8 @@ export default function CategoryMenu(props: Handlers) {
                           props.onSub(sub.id)
                           setOpenIndex(null)
                         }}
-                        className={`truncate rounded-md px-2 py-1.5 text-left text-xs font-medium transition hover:bg-orange-tint hover:text-orange-deep ${
-                          props.sub === sub.id ? 'text-orange-deep' : 'text-ink/80'
+                        className={`truncate rounded-full px-2.5 py-1.5 text-left text-xs font-medium text-ink transition-colors duration-150 hover:bg-hover motion-reduce:transition-none ${
+                          props.sub === sub.id ? 'bg-hover font-bold' : ''
                         }`}
                       >
                         {sub.name}
@@ -120,8 +118,7 @@ export default function CategoryMenu(props: Handlers) {
                       props.onTop(category.id)
                       setOpenIndex(null)
                     }}
-                    className="mt-2 flex w-full items-center gap-1 border-t border-border px-2 pt-2 text-xs font-bold text-orange-deep hover:text-ink"
-                  >
+                    className="mt-2 flex w-full items-center gap-1 border-t border-border px-2 pt-2 text-xs font-bold text-orange-deep hover:text-ink"                  >
                     See all {category.name}
                     <Icon name="arrow" className="h-3 w-3" />
                   </button>
@@ -158,7 +155,7 @@ export function CategoryDrawer(props: DrawerProps) {
           props.onSub('all')
           props.onNavigate()
         }}
-        className="flex items-center justify-between px-4 py-3 text-sm font-bold text-ink"
+        className="flex items-center justify-between px-4 py-3 text-sm font-bold text-ink transition-colors duration-150 hover:bg-hover"
       >
         All categories
         <Icon name="chevron" className="h-4 w-4" />
@@ -174,13 +171,13 @@ export function CategoryDrawer(props: DrawerProps) {
               type="button"
               aria-expanded={open}
               onClick={() => setOpenId(open ? null : category.id)}
-              className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-ink"
+              className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-ink transition-colors duration-150 hover:bg-hover"
             >
               {category.name}
               <Icon name="chevron" className={`h-4 w-4 transition ${open ? 'rotate-180' : ''}`} />
             </button>
             {open && (
-              <div className="flex flex-col gap-0.5 bg-orange-tint/40 px-4 pb-3">
+              <div className="flex flex-col gap-0.5 bg-hover/60 px-4 pb-3">
                 {children.map((sub) => (
                   <button
                     key={sub.id}
@@ -189,7 +186,7 @@ export function CategoryDrawer(props: DrawerProps) {
                       props.onSub(sub.id)
                       props.onNavigate()
                     }}
-                    className="rounded-md px-2 py-1.5 text-left text-xs font-medium text-ink/80 hover:text-orange-deep"
+                    className="rounded-full px-2 py-1.5 text-left text-xs font-medium text-ink transition-colors duration-150 hover:bg-hover"
                   >
                     {sub.name}
                   </button>
