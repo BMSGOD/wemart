@@ -39,17 +39,13 @@ export default function Footer() {
           </ul>
         </section>
 
-        <section aria-label="Sell on Wemart" className="border-t border-brown/20 pt-4 sm:border-t-0 sm:pt-0">
-          <h2 className={headingClass}>Sell on Wemart</h2>
+        <section aria-label="Sell" className="border-t border-brown/20 pt-4 sm:border-t-0 sm:pt-0">
+          <h2 className={headingClass}>Sell</h2>
           <ul className="mt-2 flex flex-col gap-1.5">
+            {/* Single quiet sell entry in the footer — plain text link */}
             <li>
               <a href="/sell" className={linkClass}>
-                Vendor dashboard
-              </a>
-            </li>
-            <li>
-              <a href="/auth/register" className={linkClass}>
-                Become a vendor
+                Sell on Wemart
               </a>
             </li>
           </ul>

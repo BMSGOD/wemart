@@ -47,26 +47,27 @@ export function HeroSection() {
         </div>
       </div>
 
-      {/* Two stacked promo tiles — sage and sand panels, ink text */}
+      {/* Two stacked promo tiles — sage ("New today") and sand */}
       <div className="flex flex-col gap-3">
-        <Link
-          href="/sell"
+        <a
+          href="#arrivals-heading"
           className="flex flex-1 items-center gap-3 rounded-lg border border-border bg-sage p-3.5 transition-colors duration-150 hover:border-ink/25 hover:shadow-soft sm:p-4 motion-reduce:transition-none"
-          data-testid="promo-sell"
+          data-testid="promo-new"
         >
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white">
-            <Icon name="sell" className="h-5 w-5 text-forest" />
+            <Icon name="arrow" className="h-5 w-5 text-forest" />
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-bold text-ink">
-              Sell on Wemart: reach students on your campus
+            <span className="block text-sm font-bold text-ink">New today</span>
+            <span className="mt-0.5 block text-xs text-ink">
+              See the latest listings from student vendors
             </span>
             <span className="mt-0.5 flex items-center gap-1 text-xs font-bold text-forest">
-              List your first item
+              See new arrivals
               <Icon name="arrow" className="h-3 w-3" />
             </span>
           </span>
-        </Link>
+        </a>
         <a
           href="#catalog"
           className="flex flex-1 items-center gap-3 rounded-lg border border-border bg-sand p-3.5 transition-colors duration-150 hover:border-ink/25 hover:shadow-soft sm:p-4 motion-reduce:transition-none"

@@ -10,8 +10,9 @@ import { Icon } from './icons'
  * - cream bar with a 1px border underneath (no top strip, no dark areas)
  * - white pill search input with a 1px ink border; the Filters control sits
  *   INSIDE the pill; an orange circular search button closes its right end
- * - auth-aware Account menu, cart, and an always-visible orange SELL pill
- * - phones: compact bar (logo, search toggle, SELL, cart, hamburger) with
+ * - auth-aware Account menu, cart (header has NO sell button any more — the
+ *   hero's "Sell an item" pill is the only prominent sell CTA)
+ * - phones: compact bar (logo, search toggle, cart, hamburger) with
  *   the accordion-category drawer
  * - icon buttons are 36px circles; hover = sky background, navy icon
  * Location selects live ONLY in the Filters panel (FilterSheet).
@@ -79,7 +80,7 @@ export default function Header({
       onClick={onOpenFilters}
       aria-haspopup="dialog"
       data-testid="header-filters"
-      className="relative flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-ink transition-colors duration-150 hover:bg-hover"
+      className="flex h-11 shrink-0 items-center gap-1.5 px-3 text-xs font-bold text-ink transition-colors duration-150 hover:bg-hover motion-reduce:transition-none"
     >
       <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" aria-hidden="true">
         <path
@@ -91,9 +92,10 @@ export default function Header({
         />
       </svg>
       <span className="hidden lg:inline">Filters</span>
+      {/* Active-filter badge lives ON the Filters label, never on Search */}
       {activeFilterCount > 0 && (
         <span
-          className="absolute -top-1 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange px-0.5 text-[9px] font-bold text-ink"
+          className="flex h-4 min-w-4 items-center justify-center rounded-full bg-orange px-1 text-[9px] font-bold text-ink"
           aria-hidden="true"
         >
           {activeFilterCount}
@@ -107,25 +109,27 @@ export default function Header({
     <form
       role="search"
       onSubmit={submitSearch}
-      className={`flex w-full items-stretch ${compact ? 'px-4 pb-2' : ''}`}
+      className={`flex w-full ${compact ? 'px-4 pb-2' : ''}`}
     >
-      {/* White pill with a 1px ink border; Filters lives inside its right end;
-          the orange circular search button is the pill's right cap */}
-      <div className="flex flex-1 items-center rounded-full border border-ink bg-white pl-3 pr-1 transition-colors duration-150 focus-within:border-orange">
+      {/* 44px white pill, 1px ink border, overflow-hidden: the search button
+          is a FLUSH end segment the bar's own rounded edge clips — orange
+          follows the outer curve, no circle, no gap. Inset ring so keyboard
+          focus stays visible despite the clipping. */}
+      <div className="flex h-11 flex-1 items-center overflow-hidden rounded-full border border-ink bg-white pl-3">
         <input
           type="search"
           aria-label="Search items"
           placeholder="Search phones, books, desks…"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          className="h-9 min-w-0 flex-1 rounded-full bg-transparent text-sm text-ink placeholder:text-taupe focus-visible:outline-none"
+          className="h-11 min-w-0 flex-1 rounded-none bg-transparent text-sm text-ink placeholder:text-taupe focus-visible:outline-none"
         />
         {filtersButton}
         <button
           type="submit"
           aria-label="Search"
           data-testid="header-search-submit"
-          className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white lg:ml-2"
+          className="flex h-11 w-14 shrink-0 items-center justify-center bg-orange text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink motion-reduce:transition-none"
         >
           <Icon name="search" className="h-4 w-4" strokeWidth={2.4} />
         </button>
@@ -151,16 +155,6 @@ export default function Header({
 
           {/* Desktop search pill */}
           <div className="hidden flex-1 lg:flex">{searchForm(false)}</div>
-
-          {/* Always-visible SELL pill */}
-          <Link
-            href="/sell"
-            data-testid="header-sell"
-            className="ml-auto flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-orange px-3.5 text-sm font-bold text-ink transition-colors duration-150 hover:bg-orange-deep hover:text-white sm:px-4 lg:ml-0"
-          >
-            <Icon name="plus" className="h-4 w-4" strokeWidth={2.4} />
-            <span>SELL</span>
-          </Link>
 
           {/* Account menu (auth-aware) — 36px round icon button */}
           <div ref={accountRef} className="relative hidden lg:block">
@@ -190,6 +184,10 @@ export default function Header({
                     <Link role="menuitem" href="/account" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
                       My account
                     </Link>
+                    {/* Quiet sell entry — plain menu text, never a button */}
+                    <Link role="menuitem" href="/sell" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
+                      Sell an item
+                    </Link>
                     <Link role="menuitem" href="/sell" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
                       Vendor dashboard
                     </Link>
@@ -215,6 +213,9 @@ export default function Header({
                     <Link role="menuitem" href="/auth/register" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
                       Create account
                     </Link>
+                    <Link role="menuitem" href="/sell" className="rounded-md px-3 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-hover" onClick={() => setAccountOpen(false)}>
+                      Sell an item
+                    </Link>
                   </>
                 )}
               </div>
@@ -232,7 +233,7 @@ export default function Header({
             aria-expanded={cartOpen}
             aria-controls="cart-panel"
             aria-label="Cart"
-            className={iconButton}
+            className={`${iconButton} ml-auto lg:ml-0`}
           >
             <Icon name="cart" className="h-5 w-5" strokeWidth={1.9} />
           </button>
