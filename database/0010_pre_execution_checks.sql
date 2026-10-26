@@ -35,7 +35,7 @@ vb AS (
            'constraint', c.conname,
            'to_table',   c.confrelid::regclass::text)), '[]'::jsonb) AS j
   FROM pg_constraint c
-  JOIN pg_namespace n ON n.oid = c.conrelnamespace
+  JOIN pg_namespace n ON n.oid = c.connamespace
   WHERE n.nspname = 'public'
     AND c.contype = 'f'
     AND c.conrelid::regclass::text IN ('vendors','buyers','products','product_variants','vendor_locations')
