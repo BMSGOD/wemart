@@ -306,6 +306,7 @@ export function ResetPasswordPage() {
 export function VerifyEmailPage() {
   const [status, setStatus] = useState<'working' | 'ok' | 'error'>('working')
   const [detail, setDetail] = useState('Confirming your email…')
+  const [recoveryMode, setRecoveryMode] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -315,6 +316,7 @@ export function VerifyEmailPage() {
     const supabase = getSupabase()
     // The recovery flow verifies through /reset-password's session instead.
     if (typeParam === 'recovery') {
+      setRecoveryMode(true)
       setStatus('ok')
       setDetail('Recovery link confirmed — set your new password below.')
       return
@@ -349,9 +351,14 @@ export function VerifyEmailPage() {
   return (
     <AuthShell title="Email verification">
       <p className={`text-sm ${status === 'error' ? 'text-orange-deep' : 'text-ink/70'}`}>{detail}</p>
-      {status === 'ok' && (
+      {status === 'ok' && !recoveryMode && (
         <Link href="/" className="mt-3 inline-block text-sm font-bold text-orange-deep underline underline-offset-2">
           Start browsing Wemart
+        </Link>
+      )}
+      {status === 'ok' && recoveryMode && (
+        <Link href="/reset-password" className="mt-3 inline-block text-sm font-bold text-orange-deep underline underline-offset-2">
+          Set your new password
         </Link>
       )}
     </AuthShell>
